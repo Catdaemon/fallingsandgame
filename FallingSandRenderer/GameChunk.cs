@@ -8,7 +8,7 @@ namespace FallingSand.FallingSandRenderer;
 
 class GameChunk
 {
-    public WorldPosition worldOrigin;
+    public WorldPosition WorldOrigin;
     private readonly FallingSandWorld.FallingSandWorld sandWorld;
     public FallingSandWorldChunk sandChunk;
     public bool hasGeneratedMap = false;
@@ -26,7 +26,7 @@ class GameChunk
         FallingSandWorldGenerator generator
     )
     {
-        this.worldOrigin = worldOrigin;
+        this.WorldOrigin = worldOrigin;
         this.sandWorld = world;
         this.generator = generator;
         this.graphicsDevice = graphicsDevice;
@@ -55,10 +55,10 @@ class GameChunk
         }
 
         var batch = generator.GenerateBatch(
-            new WorldPosition(worldOrigin.X, worldOrigin.Y),
+            new WorldPosition(WorldOrigin.X, WorldOrigin.Y),
             new WorldPosition(
-                worldOrigin.X + Constants.CHUNK_WIDTH,
-                worldOrigin.Y + Constants.CHUNK_HEIGHT
+                WorldOrigin.X + Constants.CHUNK_WIDTH,
+                WorldOrigin.Y + Constants.CHUNK_HEIGHT
             )
         );
 
@@ -81,9 +81,9 @@ class GameChunk
             }
         }
 
-        sandWorld.SetPixelBatch(worldOrigin, pixelBuffer, Constants.CHUNK_WIDTH);
+        sandWorld.SetPixelBatch(WorldOrigin, pixelBuffer, Constants.CHUNK_WIDTH);
 
-        sandChunk = sandWorld.GetOrCreateChunkFromWorldPosition(worldOrigin);
+        sandChunk = sandWorld.GetOrCreateChunkFromWorldPosition(WorldOrigin);
 
         sandChunk.Wake();
 
@@ -92,12 +92,12 @@ class GameChunk
 
     public LocalPosition WorldToLocalPosition(WorldPosition worldPosition)
     {
-        return new LocalPosition(worldPosition.X - worldOrigin.X, worldPosition.Y - worldOrigin.Y);
+        return new LocalPosition(worldPosition.X - WorldOrigin.X, worldPosition.Y - WorldOrigin.Y);
     }
 
     public WorldPosition LocalToWorldPosition(LocalPosition localPosition)
     {
-        return new WorldPosition(localPosition.X + worldOrigin.X, localPosition.Y + worldOrigin.Y);
+        return new WorldPosition(localPosition.X + WorldOrigin.X, localPosition.Y + WorldOrigin.Y);
     }
 
     public FallingSandPixel GetPixel(LocalPosition localPosition)

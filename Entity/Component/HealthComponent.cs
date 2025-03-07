@@ -4,35 +4,35 @@ namespace FallingSand.Entity.Component;
 
 class HealthComponent
 {
-    private int Current;
-    private int Max;
+    private int _current;
+    private int _max;
 
     public HealthComponent(int current, int max)
     {
-        Current = current;
-        Max = max;
+        _current = current;
+        _max = max;
     }
 
     public void Damage(int amount)
     {
-        Current -= amount;
-        if (Current < 0)
+        _current -= amount;
+        if (_current < 0)
         {
-            Current = 0;
+            _current = 0;
         }
     }
 
     public void Heal(int amount)
     {
-        Current += amount;
-        if (Current > Max)
+        _current += amount;
+        if (_current > _max)
         {
-            Current = Max;
+            _current = _max;
         }
     }
 
     public bool IsDead()
     {
-        return Current <= 0;
+        return _current <= 0;
     }
 }

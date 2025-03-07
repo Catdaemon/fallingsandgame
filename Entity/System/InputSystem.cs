@@ -55,7 +55,7 @@ class InputSystem : ISystem
                 ref InputStateComponent inputState
             ) =>
             {
-                inputState.Value = state;
+                inputState.Value = State;
             }
         );
     }
