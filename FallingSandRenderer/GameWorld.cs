@@ -1,11 +1,12 @@
 using System;
 using System.Collections.Generic;
-using fallingsand.nosync;
+using Arch.Core;
+using FallingSand.Entity.System;
 using FallingSandWorld;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 
-namespace GameWorld;
+namespace FallingSand.FallingSandRenderer;
 
 class GameWorld
 {
@@ -68,17 +69,17 @@ class GameWorld
         var (cameraStart, cameraEnd) = Camera.GetVisibleArea();
 
         var startChunkX =
-            ((int)Math.Floor(cameraStart.X / (float)Constants.CHUNK_WIDTH))
+            (int)Math.Floor(cameraStart.X / (float)Constants.CHUNK_WIDTH)
             - Constants.OFF_SCREEN_CHUNK_UNLOAD_RADIUS;
         var startChunkY =
-            ((int)Math.Floor(cameraStart.Y / (float)Constants.CHUNK_HEIGHT))
+            (int)Math.Floor(cameraStart.Y / (float)Constants.CHUNK_HEIGHT)
             - Constants.OFF_SCREEN_CHUNK_UNLOAD_RADIUS;
 
         var endChunkX =
-            ((int)Math.Ceiling(cameraEnd.X / (float)Constants.CHUNK_WIDTH))
+            (int)Math.Ceiling(cameraEnd.X / (float)Constants.CHUNK_WIDTH)
             + Constants.OFF_SCREEN_CHUNK_UNLOAD_RADIUS;
         var endChunkY =
-            ((int)Math.Ceiling(cameraEnd.Y / (float)Constants.CHUNK_HEIGHT))
+            (int)Math.Ceiling(cameraEnd.Y / (float)Constants.CHUNK_HEIGHT)
             + Constants.OFF_SCREEN_CHUNK_UNLOAD_RADIUS;
 
         foreach (var chunkPosition in gameChunks.Keys)
@@ -131,7 +132,7 @@ class GameWorld
         }
     }
 
-    public void Draw()
+    public void Draw(GameTime gameTime)
     {
         var visibleChunks = GetCameraGameChunks();
 
@@ -169,19 +170,18 @@ class GameWorld
 
         // Calculate the starting and ending chunk coordinates with buffer
         var startChunkX =
-            ((int)Math.Floor(cameraStart.X / (float)Constants.CHUNK_WIDTH))
+            (int)Math.Floor(cameraStart.X / (float)Constants.CHUNK_WIDTH)
             - Constants.OFF_SCREEN_CHUNK_UPDATE_RADIUS;
         var startChunkY =
-            ((int)Math.Floor(cameraStart.Y / (float)Constants.CHUNK_HEIGHT))
+            (int)Math.Floor(cameraStart.Y / (float)Constants.CHUNK_HEIGHT)
             - Constants.OFF_SCREEN_CHUNK_UPDATE_RADIUS;
 
         var endChunkX =
-            ((int)Math.Ceiling(cameraEnd.X / (float)Constants.CHUNK_WIDTH))
+            (int)Math.Ceiling(cameraEnd.X / (float)Constants.CHUNK_WIDTH)
             + Constants.OFF_SCREEN_CHUNK_UPDATE_RADIUS;
-        var endChunkY = (
+        var endChunkY =
             (int)Math.Ceiling(cameraEnd.Y / (float)Constants.CHUNK_HEIGHT)
-            + Constants.OFF_SCREEN_CHUNK_UPDATE_RADIUS
-        );
+            + Constants.OFF_SCREEN_CHUNK_UPDATE_RADIUS;
 
         // Iterate through chunks in view
         for (int chunkX = startChunkX; chunkX < endChunkX; chunkX++)
@@ -219,8 +219,6 @@ class GameWorld
                 generator
             );
             gameChunks[chunkPosition] = chunk;
-
-            // asyncChunkGenerator.EnqueueChunk(chunkPosition);
         }
 
         return chunk;

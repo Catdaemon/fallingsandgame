@@ -2,15 +2,17 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Reflection.Metadata.Ecma335;
+using Arch.Core;
+using FallingSand.Entity.Component;
+using FallingSand.Entity.System;
 using FallingSandWorld;
 using FPSCounter;
-using GameWorld;
 using Microsoft.VisualBasic;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 
-namespace fallingsand.nosync;
+namespace FallingSand;
 
 public class Game1 : Game
 {
@@ -18,7 +20,7 @@ public class Game1 : Game
 
     private SpriteBatch _spriteBatch;
 
-    private readonly GameWorld.GameWorld gameWorld;
+    private readonly FallingSandRenderer.GameWorld gameWorld;
     private double lastFpsTime;
 
     private readonly int worldSizeX = 800;
@@ -27,24 +29,43 @@ public class Game1 : Game
     private Material paintMaterial = Material.Sand;
     private FallingSandWorld.Color paintColor = new(255, 255, 0);
 
+    private World ecsWorld;
+    private SystemManager systemManager;
+
     public Game1()
     {
         var _graphics = new GraphicsDeviceManager(this);
         _graphics.PreferredBackBufferWidth = worldSizeX;
         _graphics.PreferredBackBufferHeight = worldSizeY;
-        _graphics.SynchronizeWithVerticalRetrace = true;
+        _graphics.SynchronizeWithVerticalRetrace = false;
         Content.RootDirectory = "Content";
         IsMouseVisible = true;
         IsFixedTimeStep = false;
-
-        Camera.SetPosition(new WorldPosition(0, 0));
-        Camera.SetSize(new WorldPosition(worldSizeX, worldSizeY));
-        Camera.SetZoom(1.0f);
         gameWorld = new();
+
+        ecsWorld = World.Create();
+        systemManager = new(ecsWorld);
     }
 
     protected override void Initialize()
     {
+        Camera.SetPosition(new WorldPosition(0, 0));
+        Camera.SetSize(new WorldPosition(worldSizeX, worldSizeY));
+        Camera.SetZoom(1.0f);
+
+        systemManager.RegisterSystems();
+
+        // Create a player entity
+        ecsWorld.Create(
+            new PositionComponent(),
+            new BoundingBoxComponent(),
+            new HealthComponent(100, 100),
+            new InputReceiverComponent(),
+            new InputStateComponent(),
+            new CameraFollowComponent(),
+            new CirclePhysicsBodyComponent(10.0f, 10.0f, new WorldPosition(100, 100))
+        );
+
         base.Initialize();
     }
 
@@ -54,30 +75,6 @@ public class Game1 : Game
         gameWorld.Init("hello", _spriteBatch, GraphicsDevice);
     }
 
-    private void UpdateCamera()
-    {
-        Camera.SetMousePosition(Mouse.GetState().Position.ToVector2());
-
-        // Camera movement with arrow keys
-        var cameraSpeed = 1;
-        if (Keyboard.GetState().IsKeyDown(Keys.Left))
-        {
-            Camera.SetPosition(Camera.GetPosition().X - cameraSpeed, Camera.GetPosition().Y);
-        }
-        if (Keyboard.GetState().IsKeyDown(Keys.Right))
-        {
-            Camera.SetPosition(Camera.GetPosition().X + cameraSpeed, Camera.GetPosition().Y);
-        }
-        if (Keyboard.GetState().IsKeyDown(Keys.Up))
-        {
-            Camera.SetPosition(Camera.GetPosition().X, Camera.GetPosition().Y - cameraSpeed);
-        }
-        if (Keyboard.GetState().IsKeyDown(Keys.Down))
-        {
-            Camera.SetPosition(Camera.GetPosition().X, Camera.GetPosition().Y + cameraSpeed);
-        }
-    }
-
     protected override void Update(GameTime gameTime)
     {
         if (
@@ -85,8 +82,6 @@ public class Game1 : Game
             || Keyboard.GetState().IsKeyDown(Keys.Escape)
         )
             Exit();
-
-        UpdateCamera();
 
         gameWorld.Update(gameTime);
 
@@ -132,6 +127,8 @@ public class Game1 : Game
             }
         }
 
+        systemManager.Update(gameTime);
+
         base.Update(gameTime);
     }
 
@@ -152,7 +149,9 @@ public class Game1 : Game
             lastFpsTime = gameTime.TotalGameTime.TotalMilliseconds;
         }
 
-        gameWorld.Draw();
+        gameWorld.Draw(gameTime);
+
+        systemManager.Draw(gameTime);
 
         base.Draw(gameTime);
     }

@@ -2,7 +2,8 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
-using fallingsand.nosync;
+using System.Runtime.CompilerServices;
+using FallingSand;
 
 namespace FallingSandWorld;
 
@@ -15,7 +16,6 @@ class FallingSandWorldChunk
     public readonly FallingSandPixel[,] pixels;
     public ConcurrentBag<LocalPosition> pixelsToDraw = [];
     public bool isAwake = true;
-    private static Random random = new();
 
     public FallingSandWorldChunk(FallingSandWorld parentWorld, int worldX, int worldY)
     {
@@ -136,6 +136,7 @@ class FallingSandWorldChunk
         }
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public FallingSandPixel GetPixel(LocalPosition position)
     {
         if (
@@ -157,18 +158,18 @@ class FallingSandWorldChunk
         return GetPixel(new LocalPosition(x, y));
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private bool IsInBounds(LocalPosition pos) =>
+        pos.X >= 0 && pos.X < Constants.CHUNK_WIDTH && pos.Y >= 0 && pos.Y < Constants.CHUNK_HEIGHT;
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void SetPixel(
         LocalPosition localPosition,
         FallingSandPixelData newPixelData,
         float velocity = 1
     )
     {
-        if (
-            localPosition.X < 0
-            || localPosition.X >= Constants.CHUNK_WIDTH
-            || localPosition.Y < 0
-            || localPosition.Y >= Constants.CHUNK_HEIGHT
-        )
+        if (!IsInBounds(localPosition))
         {
             // Console.WriteLine(
             //     $"Tried to set pixel outside of chunk: {localPosition.X}, {localPosition.Y}"
@@ -180,14 +181,10 @@ class FallingSandWorldChunk
         Wake();
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void EmptyPixel(LocalPosition localPosition)
     {
-        if (
-            localPosition.X < 0
-            || localPosition.X >= Constants.CHUNK_WIDTH
-            || localPosition.Y < 0
-            || localPosition.Y >= Constants.CHUNK_HEIGHT
-        )
+        if (!IsInBounds(localPosition))
         {
             // Console.WriteLine(
             //     $"Tried to empty pixel outside of chunk: {localPosition.X}, {localPosition.Y}"
@@ -210,6 +207,7 @@ class FallingSandWorldChunk
     }
 
     // Returns the world position of a pixel in this chunk
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public WorldPosition LocalToWorldPosition(LocalPosition localPosition)
     {
         return new WorldPosition(
@@ -218,6 +216,7 @@ class FallingSandWorldChunk
         );
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public LocalPosition WorldToLocalPosition(WorldPosition worldPos)
     {
         return new LocalPosition(

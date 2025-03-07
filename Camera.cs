@@ -1,7 +1,7 @@
 using System;
 using Microsoft.Xna.Framework;
 
-namespace fallingsand.nosync;
+namespace FallingSand;
 
 static class Camera
 {

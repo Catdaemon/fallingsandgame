@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using fallingsand.nosync;
+using FallingSand;
 
 namespace FallingSandWorld;
 
@@ -21,7 +21,7 @@ class FallingSandWorld
 
     // Pool of threads for updating chunks
     private readonly List<Thread> threads = [];
-    private readonly ConcurrentBag<FallingSandWorldChunk> chunksToUpdate = [];
+    private readonly BlockingCollection<FallingSandWorldChunk> chunksToUpdate = [];
     private readonly object worldLock = new();
 
     public FallingSandWorld(WorldPosition extents)
@@ -42,14 +42,12 @@ class FallingSandWorld
         // Grab a chunk from the bag and update it
         while (true)
         {
-            if (chunksToUpdate.TryTake(out FallingSandWorldChunk chunk))
+            foreach (var chunk in chunksToUpdate.GetConsumingEnumerable())
             {
                 chunk.Update();
             }
-            else
-            {
-                Thread.Yield();
-            }
+
+            Thread.Yield();
         }
     }
 

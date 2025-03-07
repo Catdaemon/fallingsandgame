@@ -1,2 +1,2 @@
-﻿using var game = new fallingsand.nosync.Game1();
+﻿using var game = new FallingSand.Game1();
 game.Run();

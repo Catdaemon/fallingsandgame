@@ -1,6 +1,6 @@
-namespace fallingsand.nosync;
+namespace FallingSand;
 
-public struct LocalPosition
+public readonly struct LocalPosition
 {
     public int X { get; }
     public int Y { get; }
@@ -22,7 +22,7 @@ public struct LocalPosition
     public static bool operator !=(LocalPosition left, LocalPosition right) => !left.Equals(right);
 }
 
-public struct WorldPosition
+public readonly struct WorldPosition
 {
     public int X { get; }
     public int Y { get; }
@@ -44,7 +44,7 @@ public struct WorldPosition
     public static bool operator !=(WorldPosition left, WorldPosition right) => !left.Equals(right);
 }
 
-public struct ChunkPosition
+public readonly struct ChunkPosition
 {
     public int X { get; }
     public int Y { get; }

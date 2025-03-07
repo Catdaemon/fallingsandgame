@@ -1,6 +1,6 @@
 using System;
 using System.Collections.Generic;
-using fallingsand.nosync;
+using FallingSand;
 
 namespace FallingSandWorld.Biomes;
 

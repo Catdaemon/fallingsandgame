@@ -1,7 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using fallingsand.nosync;
+using System.Threading;
+using FallingSand;
 
 namespace FallingSandWorld;
 
@@ -112,7 +113,16 @@ class FallingSandPixel
         Material.Lava,
     };
 
-    private static readonly Random random = new();
+    private static readonly bool[] _isStatic = new bool[Enum.GetValues(typeof(Material)).Length];
+    private static readonly bool[] _isLiquid = new bool[Enum.GetValues(typeof(Material)).Length];
+    private static readonly bool[] _isGas = new bool[Enum.GetValues(typeof(Material)).Length];
+    private static readonly bool[] _isFire = new bool[Enum.GetValues(typeof(Material)).Length];
+    private static readonly byte[] _density = new byte[Enum.GetValues(typeof(Material)).Length];
+    private static readonly byte[] _flammability = new byte[
+        Enum.GetValues(typeof(Material)).Length
+    ];
+
+    private static readonly ThreadLocal<Random> random = new(() => new Random());
     private readonly FallingSandWorldChunk parentChunk;
 
     private static readonly (int, int)[] adjacentOffsets = [(-1, 0), (1, 0), (0, -1), (0, 1)];
@@ -131,7 +141,23 @@ class FallingSandPixel
     public const float GRAVITY = 0.5f;
     public const float MAX_SPEED = 16f;
     public const int SLEEP_AFTER = 10;
-    private int sleepCounter = 0;
+
+    static FallingSandPixel()
+    {
+        // Initialize lookup arrays
+        foreach (Material m in Enum.GetValues(typeof(Material)))
+        {
+            _isStatic[(int)m] = STATIC_MATERIALS.Contains(m);
+            _isLiquid[(int)m] = LIQUID_MATERIALS.Contains(m);
+            _isGas[(int)m] = GAS_MATERIALS.Contains(m);
+            _isFire[(int)m] = FIRE_MATERIALS.Contains(m);
+            _density[(int)m] = MaterialProperties.Densities.GetValueOrDefault<Material, byte>(m, 0);
+            _flammability[(int)m] = MaterialProperties.Flammability.GetValueOrDefault<
+                Material,
+                byte
+            >(m, 0);
+        }
+    }
 
     public FallingSandPixel(FallingSandWorldChunk parentChunk, Material material, Color color)
     {
@@ -195,7 +221,7 @@ class FallingSandPixel
             Lifetime++;
 
             // After lifetime, randomly decide whether to extinguish
-            if (Lifetime > 100 && random.Next(100) < 10)
+            if (Lifetime > 100 && random.Value.Next(100) < 10)
             {
                 chunk.EmptyPixel(position);
             }
@@ -213,7 +239,7 @@ class FallingSandPixel
             // );
 
             // Randomly emit smoke above if there is space
-            if (random.Next(100) < 5)
+            if (random.Value.Next(100) < 5)
             {
                 var abovePosition = new WorldPosition(worldPosition.X, worldPosition.Y - 1);
                 if (chunk.parentWorld.GetPixel(abovePosition).data.Material == Material.Empty)
@@ -230,7 +256,7 @@ class FallingSandPixel
             }
 
             // Randomly emit an ember if there is space below
-            if (random.Next(2000) < 1)
+            if (random.Value.Next(2000) < 1)
             {
                 var belowPosition = new WorldPosition(worldPosition.X, worldPosition.Y + 1);
                 if (chunk.parentWorld.GetPixel(belowPosition).data.Material == Material.Empty)
@@ -267,7 +293,7 @@ class FallingSandPixel
                     );
                     break;
                 }
-                else if (random.Next(100) < pixel.Flammability)
+                else if (random.Value.Next(100) < pixel.Flammability)
                 {
                     // Try converting adjacent pixels to fire
                     chunk.parentWorld.SetPixel(
@@ -358,12 +384,12 @@ class FallingSandPixel
         if (IsGas)
         {
             // If we are a gas, randomly try to move to the side first
-            bool shouldMoveSideways = random.Next(20) == 0;
+            bool shouldMoveSideways = random.Value.Next(20) == 0;
             if (shouldMoveSideways)
             {
                 var (swap, sideMove) = TryMoveTo(
                     new WorldPosition(
-                        newWorldPosition.X + (random.Next(2) == 0 ? -1 : 1),
+                        newWorldPosition.X + (random.Value.Next(2) == 0 ? -1 : 1),
                         newWorldPosition.Y
                     )
                 );
@@ -374,7 +400,7 @@ class FallingSandPixel
             }
         }
 
-        var initialDirection = random.Next(2) == 0 ? -1 : 1;
+        var initialDirection = random.Value.Next(2) == 0 ? -1 : 1;
 
         // Try moving diagonally
         for (int i = 0; i < 2; i++)
@@ -480,20 +506,14 @@ class FallingSandPixel
 
     public void ComputeProperties()
     {
-        IsGas = GAS_MATERIALS.Contains(data.Material);
-        Static = STATIC_MATERIALS.Contains(data.Material);
-        IsLiquid = LIQUID_MATERIALS.Contains(data.Material);
-        IsFire = FIRE_MATERIALS.Contains(data.Material);
-        Density = MaterialProperties.Densities[data.Material];
+        int materialIndex = (int)data.Material;
 
-        if (MaterialProperties.Flammability.TryGetValue(data.Material, out var flammability))
-        {
-            Flammability = flammability;
-        }
-        else
-        {
-            Flammability = 0;
-        }
+        IsGas = _isGas[materialIndex];
+        Static = _isStatic[materialIndex];
+        IsLiquid = _isLiquid[materialIndex];
+        IsFire = _isFire[materialIndex];
+        Density = _density[materialIndex];
+        Flammability = _flammability[materialIndex];
 
         if (!IsFire)
         {

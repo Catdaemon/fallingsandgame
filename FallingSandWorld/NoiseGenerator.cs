@@ -4,13 +4,10 @@ namespace FallingSandWorld;
 
 public class NoiseGenerator
 {
-    private readonly Random random;
     private readonly int[] permutation;
 
     public NoiseGenerator(Random random)
     {
-        this.random = random;
-
         // Generate permutation table
         permutation = new int[512];
         for (int i = 0; i < 256; i++)

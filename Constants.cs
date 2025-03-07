@@ -1,4 +1,4 @@
-namespace fallingsand.nosync;
+namespace FallingSand;
 
 public static class Constants
 {
