@@ -122,14 +122,15 @@ class FallingSandPixel
         Enum.GetValues(typeof(Material)).Length
     ];
 
-    private static readonly ThreadLocal<Random> random = new(() => new Random());
-    private readonly FallingSandWorldChunk parentChunk;
+    private static readonly ThreadLocal<Random> Random = new(() => new Random());
+    private readonly FallingSandWorldChunk ParentChunk;
 
-    private static readonly (int, int)[] adjacentOffsets = [(-1, 0), (1, 0), (0, -1), (0, 1)];
+    private static readonly (int, int)[] AdjacentOffsets = [(-1, 0), (1, 0), (0, -1), (0, 1)];
 
-    public FallingSandPixelData data;
+    public FallingSandPixelData Data;
     public long LastUpdatedFrameId = -1;
     public bool IsAwake = true;
+    public int SleepCounter = 0;
     public bool Static = false;
     public bool IsLiquid = false;
     public bool IsFire = false;
@@ -161,26 +162,26 @@ class FallingSandPixel
 
     public FallingSandPixel(FallingSandWorldChunk parentChunk, Material material, Color color)
     {
-        this.parentChunk = parentChunk;
-        data = new() { Material = material, Color = color };
+        ParentChunk = parentChunk;
+        Data = new() { Material = material, Color = color };
         ComputeProperties();
     }
 
     public void Update(FallingSandWorldChunk chunk, LocalPosition position)
     {
-        if (LastUpdatedFrameId == chunk.parentWorld.currentFrameId)
+        if (LastUpdatedFrameId == chunk.parentWorld.CurrentFrameId)
         {
             return;
         }
 
-        LastUpdatedFrameId = chunk.parentWorld.currentFrameId;
+        LastUpdatedFrameId = chunk.parentWorld.CurrentFrameId;
 
         if (!IsAwake)
         {
             return;
         }
 
-        if (data.Material == Material.Empty)
+        if (Data.Material == Material.Empty)
         {
             IsAwake = false;
             return;
@@ -221,7 +222,7 @@ class FallingSandPixel
             Lifetime++;
 
             // After lifetime, randomly decide whether to extinguish
-            if (Lifetime > 100 && random.Value.Next(100) < 10)
+            if (Lifetime > 100 && Random.Value.Next(100) < 10)
             {
                 chunk.EmptyPixel(position);
             }
@@ -239,10 +240,10 @@ class FallingSandPixel
             // );
 
             // Randomly emit smoke above if there is space
-            if (random.Value.Next(100) < 5)
+            if (Random.Value.Next(100) < 5)
             {
                 var abovePosition = new WorldPosition(worldPosition.X, worldPosition.Y - 1);
-                if (chunk.parentWorld.GetPixel(abovePosition).data.Material == Material.Empty)
+                if (chunk.parentWorld.GetPixel(abovePosition).Data.Material == Material.Empty)
                 {
                     chunk.parentWorld.SetPixel(
                         abovePosition,
@@ -256,10 +257,10 @@ class FallingSandPixel
             }
 
             // Randomly emit an ember if there is space below
-            if (random.Value.Next(2000) < 1)
+            if (Random.Value.Next(2000) < 1)
             {
                 var belowPosition = new WorldPosition(worldPosition.X, worldPosition.Y + 1);
-                if (chunk.parentWorld.GetPixel(belowPosition).data.Material == Material.Empty)
+                if (chunk.parentWorld.GetPixel(belowPosition).Data.Material == Material.Empty)
                 {
                     chunk.parentWorld.SetPixel(
                         belowPosition,
@@ -273,12 +274,12 @@ class FallingSandPixel
             }
 
             // Remove if we are touching water
-            foreach (var (dx, dy) in adjacentOffsets)
+            foreach (var (dx, dy) in AdjacentOffsets)
             {
                 var pixel = chunk.parentWorld.GetPixel(
                     new WorldPosition(worldPosition.X + dx, worldPosition.Y + dy)
                 );
-                if (pixel.data.Material == Material.Water)
+                if (pixel.Data.Material == Material.Water)
                 {
                     // Remove us
                     chunk.EmptyPixel(position);
@@ -293,7 +294,7 @@ class FallingSandPixel
                     );
                     break;
                 }
-                else if (random.Value.Next(100) < pixel.Flammability)
+                else if (Random.Value.Next(100) < pixel.Flammability)
                 {
                     // Try converting adjacent pixels to fire
                     chunk.parentWorld.SetPixel(
@@ -311,12 +312,12 @@ class FallingSandPixel
         // If the pixel did not move, sleep
         if (!moved)
         {
-            // IsAwake = false;
+            SleepCounter++;
 
-            // if (sleepCounter > SLEEP_AFTER)
-            // {
-            //     IsAwake = false;
-            // }
+            if (SleepCounter > SLEEP_AFTER)
+            {
+                IsAwake = false;
+            }
         }
 
         if (moved)
@@ -331,7 +332,7 @@ class FallingSandPixel
         (bool swapPlaces, WorldPosition? newPosition) TryMoveTo(WorldPosition targetPosition)
         {
             var targetPixel = chunk.parentWorld.GetPixel(targetPosition);
-            if (targetPixel.data.Material == Material.Empty)
+            if (targetPixel.Data.Material == Material.Empty)
             {
                 return (false, targetPosition);
             }
@@ -384,12 +385,12 @@ class FallingSandPixel
         if (IsGas)
         {
             // If we are a gas, randomly try to move to the side first
-            bool shouldMoveSideways = random.Value.Next(20) == 0;
+            bool shouldMoveSideways = Random.Value.Next(20) == 0;
             if (shouldMoveSideways)
             {
                 var (swap, sideMove) = TryMoveTo(
                     new WorldPosition(
-                        newWorldPosition.X + (random.Value.Next(2) == 0 ? -1 : 1),
+                        newWorldPosition.X + (Random.Value.Next(2) == 0 ? -1 : 1),
                         newWorldPosition.Y
                     )
                 );
@@ -400,7 +401,7 @@ class FallingSandPixel
             }
         }
 
-        var initialDirection = random.Value.Next(2) == 0 ? -1 : 1;
+        var initialDirection = Random.Value.Next(2) == 0 ? -1 : 1;
 
         // Try moving diagonally
         for (int i = 0; i < 2; i++)
@@ -456,13 +457,13 @@ class FallingSandPixel
         {
             // Swap the two pixels
             var otherPixel = chunk.parentWorld.GetPixel(newPosition);
-            chunk.parentWorld.SetPixel(newPosition, data, Velocity);
-            chunk.parentWorld.SetPixel(position, otherPixel.data, otherPixel.Velocity);
+            chunk.parentWorld.SetPixel(newPosition, Data, Velocity);
+            chunk.parentWorld.SetPixel(position, otherPixel.Data, otherPixel.Velocity);
         }
         else
         {
             // Set the new pixel at the world level to enable cross-chunk moves
-            chunk.parentWorld.SetPixel(newPosition, data, Velocity);
+            chunk.parentWorld.SetPixel(newPosition, Data, Velocity);
             // Empty the current pixel
             chunk.EmptyPixel(chunk.WorldToLocalPosition(position));
         }
@@ -472,7 +473,7 @@ class FallingSandPixel
 
     private static void WakeAdjacentPixels(FallingSandWorldChunk chunk, LocalPosition position)
     {
-        foreach (var (dx, dy) in adjacentOffsets)
+        foreach (var (dx, dy) in AdjacentOffsets)
         {
             var worldPosition = chunk.LocalToWorldPosition(position);
             var adjacentPixel = chunk.parentWorld.GetPixel(
@@ -492,13 +493,13 @@ class FallingSandPixel
 
     public void Empty()
     {
-        data = new FallingSandPixelData { Material = Material.Empty, Color = new Color(0, 0, 0) };
+        Data = new FallingSandPixelData { Material = Material.Empty, Color = new Color(0, 0, 0) };
     }
 
     public void Set(FallingSandPixelData data, float velocity)
     {
-        LastUpdatedFrameId = parentChunk.parentWorld.currentFrameId;
-        this.data = data;
+        LastUpdatedFrameId = ParentChunk.parentWorld.CurrentFrameId;
+        Data = data;
         Velocity = velocity;
         ComputeProperties();
         Wake();
@@ -506,7 +507,7 @@ class FallingSandPixel
 
     public void ComputeProperties()
     {
-        int materialIndex = (int)data.Material;
+        int materialIndex = (int)Data.Material;
 
         IsGas = _isGas[materialIndex];
         Static = _isStatic[materialIndex];
@@ -519,5 +520,7 @@ class FallingSandPixel
         {
             Lifetime = 0;
         }
+
+        SleepCounter = 0;
     }
 }

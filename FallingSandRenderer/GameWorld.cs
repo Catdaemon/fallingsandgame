@@ -5,6 +5,7 @@ using FallingSand.Entity.System;
 using FallingSandWorld;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
+using nkast.Aether.Physics2D.Dynamics;
 
 namespace FallingSand.FallingSandRenderer;
 
@@ -12,27 +13,30 @@ class GameWorld
 {
     private const int TARGET_SAND_FPS = 60;
     private readonly Dictionary<ChunkPosition, GameChunk> gameChunks = [];
-    private GraphicsDevice graphicsDevice;
-    private FallingSandWorldGenerator generator;
     public FallingSandWorld.FallingSandWorld sandWorld;
+    public nkast.Aether.Physics2D.Dynamics.World physicsWorld;
     private SpriteBatch spriteBatch;
+    private GameChunkPool gameChunkPool;
     private readonly AsyncChunkGenerator asyncChunkGenerator;
 
-    private readonly DoEvery unloadOffScreenChunksTimer;
     private readonly DoEvery createNewChunksTimer;
     private readonly DoEvery updateGameWorldTimer;
 
     public GameWorld()
     {
         asyncChunkGenerator = new AsyncChunkGenerator(this);
-        unloadOffScreenChunksTimer = new DoEvery(UnloadOffScreenChunks, 1000);
         createNewChunksTimer = new DoEvery(CreateNewChunks, 100);
         updateGameWorldTimer = new DoEvery(UpdateGameWorld, 1000 / TARGET_SAND_FPS);
     }
 
-    public void Init(string seed, SpriteBatch spriteBatch, GraphicsDevice graphicsDevice)
+    public void Init(
+        string seed,
+        SpriteBatch spriteBatch,
+        GraphicsDevice graphicsDevice,
+        nkast.Aether.Physics2D.Dynamics.World physicsWorld
+    )
     {
-        generator = new FallingSandWorldGenerator(
+        var generator = new FallingSandWorldGenerator(
             seed,
             new WorldGeneratorConfig()
             {
@@ -43,9 +47,18 @@ class GameWorld
             }
         );
         sandWorld = new FallingSandWorld.FallingSandWorld(new WorldPosition(1000, 1000));
+        this.physicsWorld = physicsWorld;
 
         this.spriteBatch = spriteBatch;
-        this.graphicsDevice = graphicsDevice;
+
+        gameChunkPool = new GameChunkPool(
+            graphicsDevice,
+            spriteBatch,
+            sandWorld,
+            generator,
+            physicsWorld
+        );
+        gameChunkPool.Initialize(100);
 
         asyncChunkGenerator.Start();
     }
@@ -55,7 +68,7 @@ class GameWorld
         // Loop through all chunks and create new ones if they are not loaded
         foreach (var (position, chunk) in gameChunks)
         {
-            if (!chunk.hasGeneratedMap)
+            if (!chunk.HasGeneratedMap)
             {
                 asyncChunkGenerator.EnqueueChunk(position);
                 break; // Only request one chunk per update
@@ -68,32 +81,36 @@ class GameWorld
         // Find all chunks that are off screen and unload them
         var (cameraStart, cameraEnd) = Camera.GetVisibleArea();
 
-        var startChunkX =
-            (int)Math.Floor(cameraStart.X / (float)Constants.CHUNK_WIDTH)
-            - Constants.OFF_SCREEN_CHUNK_UNLOAD_RADIUS;
-        var startChunkY =
-            (int)Math.Floor(cameraStart.Y / (float)Constants.CHUNK_HEIGHT)
-            - Constants.OFF_SCREEN_CHUNK_UNLOAD_RADIUS;
+        // Padding to avoid unloading chunks that are just off screen
+        var paddingAmount = Constants.OFF_SCREEN_CHUNK_UNLOAD_RADIUS;
 
-        var endChunkX =
-            (int)Math.Ceiling(cameraEnd.X / (float)Constants.CHUNK_WIDTH)
-            + Constants.OFF_SCREEN_CHUNK_UNLOAD_RADIUS;
-        var endChunkY =
-            (int)Math.Ceiling(cameraEnd.Y / (float)Constants.CHUNK_HEIGHT)
-            + Constants.OFF_SCREEN_CHUNK_UNLOAD_RADIUS;
-
-        foreach (var chunkPosition in gameChunks.Keys)
+        // Calculate positions to unload which are outside the camera view with padding
+        var positionsToUnload = new List<ChunkPosition>();
+        foreach (var (position, _) in gameChunks)
         {
             if (
-                chunkPosition.X < startChunkX
-                || chunkPosition.X > endChunkX
-                || chunkPosition.Y < startChunkY
-                || chunkPosition.Y > endChunkY
+                position.X
+                    < (int)Math.Floor(cameraStart.X / (float)Constants.CHUNK_WIDTH) - paddingAmount
+                || position.X
+                    > (int)Math.Ceiling(cameraEnd.X / (float)Constants.CHUNK_WIDTH) + paddingAmount
+                || position.Y
+                    < (int)Math.Floor(cameraStart.Y / (float)Constants.CHUNK_HEIGHT) - paddingAmount
+                || position.Y
+                    > (int)Math.Ceiling(cameraEnd.Y / (float)Constants.CHUNK_HEIGHT) + paddingAmount
             )
             {
-                gameChunks[chunkPosition].Unload();
-                gameChunks.Remove(chunkPosition);
-                Console.WriteLine($"Unloaded chunk at {chunkPosition}");
+                positionsToUnload.Add(position);
+            }
+        }
+
+        // Now unload them
+        foreach (var position in positionsToUnload)
+        {
+            if (gameChunks.TryGetValue(position, out var chunk))
+            {
+                chunk.Unload();
+                gameChunkPool.Return(chunk);
+                gameChunks.Remove(position);
             }
         }
     }
@@ -106,7 +123,7 @@ class GameWorld
         var end = visibleEnd;
 
         // Add some padding to the start and end positions
-        var paddingAmount = 8;
+        var paddingAmount = 0;
         start = new WorldPosition(
             start.X - Constants.CHUNK_WIDTH * paddingAmount,
             start.Y - Constants.CHUNK_HEIGHT * paddingAmount
@@ -117,27 +134,51 @@ class GameWorld
         );
 
         sandWorld.Update(start, end);
+        // sandWorld.UpdateSynchronously(start, end);
     }
 
     public void Update(GameTime gameTime)
     {
-        unloadOffScreenChunksTimer.Update(gameTime);
+        UnloadOffScreenChunks();
         createNewChunksTimer.Update(gameTime);
         updateGameWorldTimer.Update(gameTime);
 
-        var chunks = GetCameraGameChunks();
-        foreach (var chunk in chunks)
+        var chunks = GetCameraGameChunks(true);
+
+        var foundPositions = new HashSet<WorldPosition>();
+        foreach (var (_, chunk) in chunks)
         {
-            chunk.Update();
+            if (foundPositions.Contains(chunk.WorldOrigin))
+            {
+                Console.WriteLine(
+                    "Warning: Duplicate chunk found in update list at {0}, {1}",
+                    chunk.WorldOrigin.X,
+                    chunk.WorldOrigin.Y
+                );
+                continue;
+            }
+            foundPositions.Add(chunk.WorldOrigin);
+        }
+
+        foreach (var (pos, chunk) in chunks)
+        {
+            // Update the chunk every 100ms
+            if (chunk.lastUpdateTime > gameTime.TotalGameTime.TotalMilliseconds - 100)
+            {
+                continue;
+            }
+            asyncChunkGenerator.EnqueueChunk(pos);
+            chunk.Update(gameTime);
+            chunk.lastUpdateTime = gameTime.TotalGameTime.TotalMilliseconds;
         }
     }
 
     public void Draw(GameTime gameTime)
     {
-        var visibleChunks = GetCameraGameChunks();
+        var visibleChunks = GetCameraGameChunks(false);
 
         // Draw to the render targets
-        foreach (var chunk in visibleChunks)
+        foreach (var (_, chunk) in visibleChunks)
         {
             chunk.Draw();
         }
@@ -147,13 +188,13 @@ class GameWorld
             transformMatrix: Camera.GetTransformMatrix(),
             samplerState: SamplerState.PointWrap
         );
-        foreach (var chunk in visibleChunks)
+        foreach (var (_, chunk) in visibleChunks)
         {
             spriteBatch.Draw(
-                chunk.renderTarget,
+                chunk.RenderTarget,
                 new Rectangle(
-                    chunk.worldOrigin.X,
-                    chunk.worldOrigin.Y,
+                    chunk.WorldOrigin.X,
+                    chunk.WorldOrigin.Y,
                     Constants.CHUNK_WIDTH,
                     Constants.CHUNK_HEIGHT
                 ),
@@ -163,7 +204,7 @@ class GameWorld
         spriteBatch.End();
     }
 
-    public IEnumerable<GameChunk> GetCameraGameChunks()
+    public IEnumerable<(ChunkPosition, GameChunk)> GetCameraGameChunks(bool createMissing = false)
     {
         // Returns all chunks visible by the camera
         var (cameraStart, cameraEnd) = Camera.GetVisibleArea();
@@ -189,7 +230,13 @@ class GameWorld
             for (int chunkY = startChunkY; chunkY < endChunkY; chunkY++)
             {
                 var chunkPosition = new ChunkPosition(chunkX, chunkY);
-                yield return GetOrCreateChunkFromChunkPosition(chunkPosition);
+
+                if (!createMissing && !gameChunks.ContainsKey(chunkPosition))
+                {
+                    continue;
+                }
+
+                yield return (chunkPosition, GetOrCreateChunkFromChunkPosition(chunkPosition));
             }
         }
     }
@@ -208,16 +255,11 @@ class GameWorld
     {
         if (!gameChunks.TryGetValue(chunkPosition, out var chunk))
         {
-            chunk = new GameChunk(
-                graphicsDevice,
-                spriteBatch,
-                new WorldPosition(
-                    chunkPosition.X * Constants.CHUNK_WIDTH,
-                    chunkPosition.Y * Constants.CHUNK_HEIGHT
-                ),
-                sandWorld,
-                generator
+            var newChunkWorldPosition = new WorldPosition(
+                chunkPosition.X * Constants.CHUNK_WIDTH,
+                chunkPosition.Y * Constants.CHUNK_HEIGHT
             );
+            chunk = gameChunkPool.Get(newChunkWorldPosition);
             gameChunks[chunkPosition] = chunk;
         }
 
@@ -226,8 +268,6 @@ class GameWorld
 
     public FallingSandPixel GetPixelAtWorldPosition(WorldPosition worldPosition)
     {
-        var chunk = GetOrCreateChunk(worldPosition);
-        var localPosition = chunk.WorldToLocalPosition(worldPosition);
-        return chunk.GetPixel(localPosition);
+        return sandWorld.GetPixel(worldPosition);
     }
 }

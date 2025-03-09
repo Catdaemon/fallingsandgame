@@ -4,7 +4,7 @@ using nkast.Aether.Physics2D.Dynamics;
 
 namespace FallingSand.Entity.Component;
 
-class PhysicsBodyComponent
+class PhysicsBodyComponent(Body physicsBodyRef)
 {
-    public Body PhysicsBodyRef { get; set; } = null;
+    public Body PhysicsBodyRef { get; set; } = physicsBodyRef;
 }

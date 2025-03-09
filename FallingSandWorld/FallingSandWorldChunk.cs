@@ -3,25 +3,25 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
+using Arch.Core;
 using FallingSand;
+using FallingSand.Entity.Component;
 
 namespace FallingSandWorld;
 
 class FallingSandWorldChunk
 {
-    public int WorldX;
-    public int WorldY;
+    public ChunkPosition ChunkPos;
 
     public readonly FallingSandWorld parentWorld;
     public readonly FallingSandPixel[,] pixels;
     public ConcurrentBag<LocalPosition> pixelsToDraw = [];
     public bool isAwake = true;
 
-    public FallingSandWorldChunk(FallingSandWorld parentWorld, int worldX, int worldY)
+    public FallingSandWorldChunk(FallingSandWorld parentWorld, ChunkPosition chunkPos)
     {
         this.parentWorld = parentWorld;
-        WorldX = worldX;
-        WorldY = worldY;
+        ChunkPos = chunkPos;
         pixels = new FallingSandPixel[Constants.CHUNK_WIDTH, Constants.CHUNK_HEIGHT];
         InitializePixels();
     }
@@ -35,6 +35,14 @@ class FallingSandWorldChunk
                 pixels[x, y] = new FallingSandPixel(this, Material.Empty, new Color(0, 0, 0));
             }
         }
+    }
+
+    public void Reset(ChunkPosition newPosition)
+    {
+        ChunkPos = newPosition;
+        isAwake = true;
+        // ClearDrawQueue();
+        // InitializePixels();
     }
 
     public void Wake()
@@ -56,8 +64,8 @@ class FallingSandWorldChunk
         if (!isAwake)
             return;
 
-        var leftFrame = parentWorld.currentFrameId % 2 == 0;
-        var topFrame = parentWorld.currentFrameId % 4 < 2; // Alternate between top-down and bottom-up
+        var leftFrame = parentWorld.CurrentFrameId % 2 == 0;
+        var topFrame = parentWorld.CurrentFrameId % 4 < 2; // Alternate between top-down and bottom-up
 
         bool anyPixelsUpdated = false;
 
@@ -119,7 +127,7 @@ class FallingSandWorldChunk
                 {
                     if (
                         pixels[x, y].IsAwake
-                        && pixels[x, y].LastUpdatedFrameId < parentWorld.currentFrameId
+                        && pixels[x, y].LastUpdatedFrameId < parentWorld.CurrentFrameId
                     )
                     {
                         var pixel = pixels[x, y];
@@ -211,8 +219,8 @@ class FallingSandWorldChunk
     public WorldPosition LocalToWorldPosition(LocalPosition localPosition)
     {
         return new WorldPosition(
-            localPosition.X + WorldX * Constants.CHUNK_WIDTH,
-            localPosition.Y + WorldY * Constants.CHUNK_HEIGHT
+            localPosition.X + ChunkPos.X * Constants.CHUNK_WIDTH,
+            localPosition.Y + ChunkPos.Y * Constants.CHUNK_HEIGHT
         );
     }
 
@@ -220,8 +228,8 @@ class FallingSandWorldChunk
     public LocalPosition WorldToLocalPosition(WorldPosition worldPos)
     {
         return new LocalPosition(
-            worldPos.X - (WorldX * Constants.CHUNK_WIDTH),
-            worldPos.Y - (WorldY * Constants.CHUNK_HEIGHT)
+            worldPos.X - (ChunkPos.X * Constants.CHUNK_WIDTH),
+            worldPos.Y - (ChunkPos.Y * Constants.CHUNK_HEIGHT)
         );
     }
 }

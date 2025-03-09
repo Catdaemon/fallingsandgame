@@ -1,3 +1,4 @@
+using System;
 using Arch.Core;
 using Arch.Core.Extensions;
 using FallingSand.Entity.Component;
@@ -9,13 +10,17 @@ namespace FallingSand.Entity.System;
 
 class PhysicsSystem : ISystem
 {
-    private readonly nkast.Aether.Physics2D.Dynamics.World PhysicsWorld = new();
+    private readonly nkast.Aether.Physics2D.Dynamics.World PhysicsWorld;
     private readonly Arch.Core.World ECSWorld;
 
-    public PhysicsSystem(Arch.Core.World ecsWorld)
+    public PhysicsSystem(
+        Arch.Core.World ecsWorld,
+        nkast.Aether.Physics2D.Dynamics.World physicsWorld
+    )
     {
         ECSWorld = ecsWorld;
-        PhysicsWorld.Gravity = new nkast.Aether.Physics2D.Common.Vector2(0, 9.8f);
+        PhysicsWorld = physicsWorld;
+        PhysicsWorld.Gravity = new nkast.Aether.Physics2D.Common.Vector2(0, 10f);
     }
 
     public void CreatePhysicsBodies()
@@ -26,17 +31,22 @@ class PhysicsSystem : ISystem
             in query,
             (Arch.Core.Entity entity, ref CirclePhysicsBodyComponent circle) =>
             {
-                if (circle != null)
+                if (!entity.Has<PhysicsBodyComponent>())
                 {
-                    circle.PhysicsBodyRef = PhysicsWorld.CreateCircle(
-                        circle.Radius,
-                        circle.Density,
-                        new nkast.Aether.Physics2D.Common.Vector2(
-                            circle.InitialPosition.X,
-                            circle.InitialPosition.Y
-                        ),
-                        BodyType.Dynamic
-                    );
+                    // Create a physics body for the entity
+                    if (circle != null)
+                    {
+                        var bodyRef = PhysicsWorld.CreateCircle(
+                            circle.Radius,
+                            circle.Density,
+                            new nkast.Aether.Physics2D.Common.Vector2(
+                                circle.InitialPosition.X,
+                                circle.InitialPosition.Y
+                            ),
+                            BodyType.Dynamic
+                        );
+                        entity.Add(new PhysicsBodyComponent(bodyRef));
+                    }
                 }
             }
         );
@@ -52,15 +62,16 @@ class PhysicsSystem : ISystem
             in query,
             (Arch.Core.Entity entity, ref PhysicsBodyComponent physicsBody) =>
             {
-                if (entity.Has<InputReceiverComponent>())
+                if (entity.Has<InputStateComponent>())
                 {
                     // Update the physics object based on the input state
                     var inputState = entity.Get<InputStateComponent>().Value;
-                    physicsBody.PhysicsBodyRef.LinearVelocity =
+                    var inputVector =
                         new nkast.Aether.Physics2D.Common.Vector2(
                             inputState.Left - inputState.Right,
                             inputState.Up - inputState.Down
-                        );
+                        ) * -100f;
+                    physicsBody.PhysicsBodyRef.ApplyForce(inputVector);
                 }
                 if (entity.Has<PositionComponent>())
                 {
@@ -73,10 +84,10 @@ class PhysicsSystem : ISystem
                 if (entity.Has<BoundingBoxComponent>())
                 {
                     // Update the bounding box based on the physics object
-                    // entity.Get<BoundingBoxComponent>().Value = physicsBody.Definition.
+                    // entity.Get<BoundingBoxComponent>().Value = physicsBody.PhysicsBodyRef.FixtureList[0].Shape.ComputeAABB();
                 }
             }
         );
-        PhysicsWorld.Step(gameTime.ElapsedGameTime);
+        PhysicsWorld.Step(Math.Min((float)gameTime.ElapsedGameTime.TotalSeconds, 1f / 30f));
     }
 }

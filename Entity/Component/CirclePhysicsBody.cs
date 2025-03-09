@@ -1,6 +1,6 @@
 namespace FallingSand.Entity.Component;
 
-class CirclePhysicsBodyComponent : PhysicsBodyComponent
+class CirclePhysicsBodyComponent
 {
     public float Radius;
     public float Density;

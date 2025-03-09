@@ -16,38 +16,52 @@ class FallingSandWorld
     // These chunks are stored in a dictionary with the key being the chunk's x/y index
     // These indexes are calculated by dividing the world x/y position by the chunk width/height
     // This allows us to quickly look up chunks by their x/y position, or convert a world x/y position to a chunk x/y position
-    private readonly Dictionary<ChunkPosition, FallingSandWorldChunk> sandChunks = [];
-    public long currentFrameId = 0;
+    private readonly object SandChunksLock = new();
+    private readonly Dictionary<ChunkPosition, FallingSandWorldChunk> SandChunks = [];
+    private readonly FallingSandWorldChunkPool ChunkPool;
+    public long CurrentFrameId = 0;
 
     // Pool of threads for updating chunks
-    private readonly List<Thread> threads = [];
-    private readonly BlockingCollection<FallingSandWorldChunk> chunksToUpdate = [];
-    private readonly object worldLock = new();
+    private readonly List<Thread> Threads = [];
+    private readonly BlockingCollection<FallingSandWorldChunk> ChunksToUpdate = [];
+    private readonly List<ManualResetEventSlim> WorkerEvents = [];
+    private volatile bool ShuttingDown = false;
+    private readonly object WorldLock = new();
 
     public FallingSandWorld(WorldPosition extents)
     {
         Extents = extents;
 
+        ChunkPool = new FallingSandWorldChunkPool(this);
+        ChunkPool.Initialize(100);
+
         // Create a thread pool
-        for (int i = 0; i < 4; i++)
+        for (int i = 0; i < 3; i++)
         {
-            threads.Add(new Thread(WorkerThreadFunction));
+            var resetEvent = new ManualResetEventSlim(false);
+            WorkerEvents.Add(resetEvent);
+            Threads.Add(new Thread(() => WorkerThreadFunction(resetEvent)));
         }
 
-        threads.ForEach(thread => thread.Start());
+        Threads.ForEach(thread => thread.Start());
     }
 
-    private void WorkerThreadFunction()
+    private void WorkerThreadFunction(ManualResetEventSlim resetEvent)
     {
-        // Grab a chunk from the bag and update it
-        while (true)
+        while (!ShuttingDown)
         {
-            foreach (var chunk in chunksToUpdate.GetConsumingEnumerable())
+            // Wait for work signal
+            resetEvent.Wait();
+
+            // Process chunks until queue is empty
+            while (ChunksToUpdate.TryTake(out var chunk))
             {
-                chunk.Update();
+                if (chunk.isAwake)
+                    chunk.Update();
             }
 
-            Thread.Yield();
+            // Signal completion and reset
+            resetEvent.Reset();
         }
     }
 
@@ -67,8 +81,8 @@ class FallingSandWorld
     )
     {
         return new WorldPosition(
-            chunk.WorldX * Constants.CHUNK_WIDTH + localPosition.X,
-            chunk.WorldY * Constants.CHUNK_HEIGHT + localPosition.Y
+            chunk.ChunkPos.X * Constants.CHUNK_WIDTH + localPosition.X,
+            chunk.ChunkPos.Y * Constants.CHUNK_HEIGHT + localPosition.Y
         );
     }
 
@@ -93,13 +107,19 @@ class FallingSandWorld
 
     public FallingSandWorldChunk GetOrCreateChunkFromChunkPosition(ChunkPosition chunkPos)
     {
-        if (!sandChunks.TryGetValue(chunkPos, out FallingSandWorldChunk value))
+        // Check to see if we already have a chunk at this position
+        lock (SandChunksLock)
         {
-            value = new FallingSandWorldChunk(this, chunkPos.X, chunkPos.Y);
-            sandChunks[chunkPos] = value;
-        }
+            if (SandChunks.TryGetValue(chunkPos, out var chunk))
+            {
+                return chunk;
+            }
 
-        return value;
+            var newChunk = ChunkPool.Get(chunkPos);
+            SandChunks.Add(chunkPos, newChunk);
+
+            return newChunk;
+        }
     }
 
     public IEnumerable<FallingSandWorldChunk> GetChunksInBBox(
@@ -137,7 +157,7 @@ class FallingSandWorld
 
     public void SetPixelBatch(WorldPosition startPos, FallingSandPixelData[] pixels, int width)
     {
-        lock (worldLock) // One lock for the entire operation
+        lock (WorldLock) // One lock for the entire operation
         {
             int height = pixels.Length / width;
 
@@ -170,44 +190,56 @@ class FallingSandWorld
 
     public void UpdateSynchronously(WorldPosition start, WorldPosition end)
     {
-        foreach (var chunk in GetChunksInBBox(start, end))
+        var relevantChunks = GetChunksInBBox(start, end);
+
+        foreach (var chunk in relevantChunks)
         {
             chunk.Update();
         }
-        currentFrameId++;
+        CurrentFrameId++;
     }
 
     public void Update(WorldPosition start, WorldPosition end)
     {
-        // We want to update sand chunks in their own threads
-        // Because most CPUs don't have more than 4 cores, we'll limit the number of threads to 4
-        // As there are more than 4 chunks, we'll need to update them in batches
-        // We don't need to update all chunks every frame, so we'll update a random selection of chunks each frame
-
         // Get a list of all chunks in the bounding box which are awake
         var chunkInBBox = GetChunksInBBox(start, end).Where(chunk => chunk.isAwake);
 
         // To avoid thread safety issues, we'll update the chunks in an alternating checkerboard pattern based on the frame count
         var checkerboardChunks = chunkInBBox.Where(chunk =>
         {
-            var chunkPos = WorldToChunkPosition(new WorldPosition(chunk.WorldX, chunk.WorldY));
-            return (chunkPos.X + chunkPos.Y + currentFrameId) % 2 == 0;
+            return (chunk.ChunkPos.X + chunk.ChunkPos.Y + CurrentFrameId) % 2 == 0;
         });
 
-        // Add the chunks to the bag
-        foreach (var chunk in checkerboardChunks)
+        // Skip work entirely if no chunks need updating
+        if (!checkerboardChunks.Any())
         {
-            chunksToUpdate.Add(chunk);
+            CurrentFrameId++;
+            return;
         }
 
-        // Wait for all threads to finish
-        while (chunksToUpdate.Count > 0)
+        // Add chunks to queue
+        foreach (var chunk in chunkInBBox)
         {
-            Thread.Yield();
+            ChunksToUpdate.Add(chunk);
+        }
+
+        // Signal workers to start
+        foreach (var evt in WorkerEvents)
+        {
+            evt.Set();
+        }
+
+        // Wait for workers with timeout to prevent deadlocks
+        bool allFinished = WorkerEvents.All(evt => evt.Wait(100));
+
+        // If timeout occurred, don't wait indefinitely
+        if (!allFinished)
+        {
+            Console.WriteLine("Warning: Update did not complete in time frame");
         }
 
         // Increment the frame count
-        currentFrameId++;
+        CurrentFrameId++;
     }
 
     public void WakeChunkAt(WorldPosition worldPosition)
@@ -216,12 +248,43 @@ class FallingSandWorld
         chunk.Wake();
     }
 
+    public void UnloadChunks(IEnumerable<ChunkPosition> chunksToUnload)
+    {
+        lock (SandChunksLock)
+        {
+            foreach (var chunkPos in chunksToUnload)
+            {
+                if (SandChunks.TryGetValue(chunkPos, out var chunk))
+                {
+                    SandChunks.Remove(chunkPos);
+                    ChunkPool.Return(chunk);
+                }
+            }
+        }
+    }
+
     public void UnloadChunkAt(WorldPosition worldPosition)
     {
         var chunkPos = WorldToChunkPosition(worldPosition);
-        if (sandChunks.ContainsKey(chunkPos))
+        UnloadChunks([chunkPos]);
+    }
+
+    public void Dispose()
+    {
+        ShuttingDown = true;
+        foreach (var evt in WorkerEvents)
         {
-            sandChunks.Remove(chunkPos);
+            evt.Set(); // Signal all threads to check shutdown condition
+        }
+
+        foreach (var thread in Threads)
+        {
+            thread.Join(1000); // Give threads 1 second to exit
+        }
+
+        foreach (var evt in WorkerEvents)
+        {
+            evt.Dispose();
         }
     }
 }

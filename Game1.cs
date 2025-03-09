@@ -11,6 +11,7 @@ using Microsoft.VisualBasic;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
+using nkast.Aether.Physics2D.Dynamics;
 
 namespace FallingSand;
 
@@ -29,31 +30,34 @@ public class Game1 : Game
     private Material paintMaterial = Material.Sand;
     private FallingSandWorld.Color paintColor = new(255, 255, 0);
 
-    private World ecsWorld;
-    private SystemManager systemManager;
+    private readonly Arch.Core.World ecsWorld;
+    private readonly SystemManager systemManager;
+    private readonly nkast.Aether.Physics2D.Dynamics.World physicsWorld = new();
 
     public Game1()
     {
         var _graphics = new GraphicsDeviceManager(this);
         _graphics.PreferredBackBufferWidth = worldSizeX;
         _graphics.PreferredBackBufferHeight = worldSizeY;
-        _graphics.SynchronizeWithVerticalRetrace = false;
         Content.RootDirectory = "Content";
         IsMouseVisible = true;
+
+        _graphics.SynchronizeWithVerticalRetrace = true;
         IsFixedTimeStep = false;
+
         gameWorld = new();
 
-        ecsWorld = World.Create();
+        ecsWorld = Arch.Core.World.Create();
         systemManager = new(ecsWorld);
     }
 
     protected override void Initialize()
     {
-        Camera.SetPosition(new WorldPosition(0, 0));
+        Camera.SetPosition(new WorldPosition(64, 64));
         Camera.SetSize(new WorldPosition(worldSizeX, worldSizeY));
         Camera.SetZoom(1.0f);
 
-        systemManager.RegisterSystems();
+        systemManager.RegisterSystems(physicsWorld);
 
         // Create a player entity
         ecsWorld.Create(
@@ -72,7 +76,8 @@ public class Game1 : Game
     protected override void LoadContent()
     {
         _spriteBatch = new SpriteBatch(GraphicsDevice);
-        gameWorld.Init("hello", _spriteBatch, GraphicsDevice);
+        gameWorld.Init("hello", _spriteBatch, GraphicsDevice, physicsWorld);
+        systemManager.InitializeGraphics(GraphicsDevice);
     }
 
     protected override void Update(GameTime gameTime)

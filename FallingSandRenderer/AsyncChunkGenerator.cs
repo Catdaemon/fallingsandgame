@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using FallingSand;
 
@@ -9,8 +10,9 @@ class AsyncChunkGenerator
 {
     private readonly List<Thread> Threads = [];
     private bool IsRunning = false;
-    private readonly ConcurrentBag<ChunkPosition> ChunksToGenerate = [];
+    private readonly ConcurrentQueue<ChunkPosition> ChunksToGenerate = new();
     private readonly GameWorld World;
+    private readonly ManualResetEvent WaitHandle = new ManualResetEvent(false);
 
     public AsyncChunkGenerator(GameWorld world)
     {
@@ -26,14 +28,18 @@ class AsyncChunkGenerator
     {
         while (IsRunning)
         {
-            if (ChunksToGenerate.TryTake(out ChunkPosition chunkPosition))
+            if (ChunksToGenerate.TryDequeue(out ChunkPosition chunkPosition))
             {
                 var chunk = World.GetOrCreateChunkFromChunkPosition(chunkPosition);
+                // This is a noop if the chunk has already been generated
                 chunk.Generate();
+
+                // Update the physics polygons for the chunk
+                chunk.UpdatePhysicsPolygons();
             }
             else
             {
-                Thread.Yield();
+                WaitHandle.WaitOne(50); // Wait up to 50ms for new work
             }
         }
     }
@@ -52,6 +58,12 @@ class AsyncChunkGenerator
 
     public void EnqueueChunk(ChunkPosition chunkPosition)
     {
-        ChunksToGenerate.Add(chunkPosition);
+        // Only add if not already in queue
+        if (!ChunksToGenerate.Contains(chunkPosition))
+        {
+            ChunksToGenerate.Enqueue(chunkPosition);
+            WaitHandle.Set(); // Signal waiting threads
+            WaitHandle.Reset();
+        }
     }
 }

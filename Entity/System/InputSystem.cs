@@ -1,3 +1,4 @@
+using System;
 using Arch.Core;
 using FallingSand.Entity.Component;
 using Microsoft.Xna.Framework;
@@ -40,9 +41,9 @@ class InputSystem : ISystem
 
     public void Update(GameTime gameTime)
     {
-        UpdateKeyboard();
-        UpdateMouse();
-        UpdateController();
+        ZeroState();
+
+        State = CombineStates(UpdateKeyboard(), UpdateMouse(), UpdateController());
 
         // Update the input state component for all entities
         // Only entities with both InputReceiverComponent and InputStateComponent will be updated
@@ -60,36 +61,80 @@ class InputSystem : ISystem
         );
     }
 
-    private void UpdateKeyboard()
+    private void ZeroState()
+    {
+        State.Up = 0;
+        State.Down = 0;
+        State.Left = 0;
+        State.Right = 0;
+        State.Jump = false;
+        State.Shoot = false;
+        State.AimVector = Vector2.Zero;
+        State.MousePosition = Vector2.Zero;
+    }
+
+    private InputState UpdateKeyboard()
     {
         var keyboard = Keyboard.GetState();
 
-        State.Up = keyboard.IsKeyDown(Keys.W) ? 1 : 0;
-        State.Down = keyboard.IsKeyDown(Keys.S) ? 1 : 0;
-        State.Left = keyboard.IsKeyDown(Keys.A) ? 1 : 0;
-        State.Right = keyboard.IsKeyDown(Keys.D) ? 1 : 0;
-        State.Jump = keyboard.IsKeyDown(Keys.Space);
+        return new InputState
+        {
+            Up = keyboard.IsKeyDown(Keys.W) ? 1 : 0,
+            Down = keyboard.IsKeyDown(Keys.S) ? 1 : 0,
+            Left = keyboard.IsKeyDown(Keys.A) ? 1 : 0,
+            Right = keyboard.IsKeyDown(Keys.D) ? 1 : 0,
+            Jump = keyboard.IsKeyDown(Keys.Space),
+        };
     }
 
-    private void UpdateMouse()
+    private InputState UpdateMouse()
     {
         var mouse = Mouse.GetState();
 
-        State.MousePosition = new Vector2(mouse.X, mouse.Y);
-        State.Shoot = mouse.LeftButton == ButtonState.Pressed;
+        return new InputState
+        {
+            AimVector = new Vector2(mouse.X, mouse.Y),
+            Shoot = mouse.LeftButton == ButtonState.Pressed,
+        };
     }
 
-    private void UpdateController()
+    private InputState UpdateController()
     {
         var controller = GamePad.GetState(PlayerIndex.One);
 
-        State.AimVector = controller.ThumbSticks.Right;
-        State.Shoot = controller.Triggers.Right > 0.5f;
+        return new InputState
+        {
+            AimVector = controller.ThumbSticks.Right,
+            Shoot = controller.Triggers.Right > 0.5f,
 
-        State.Up = controller.ThumbSticks.Left.Y;
-        State.Down = -controller.ThumbSticks.Left.Y;
-        State.Left = -controller.ThumbSticks.Left.X;
-        State.Right = controller.ThumbSticks.Left.X;
+            Up = controller.ThumbSticks.Left.Y,
+            Down = -controller.ThumbSticks.Left.Y,
+            Left = -controller.ThumbSticks.Left.X,
+            Right = controller.ThumbSticks.Left.X,
+        };
+    }
+
+    private InputState CombineStates(params InputState[] states)
+    {
+        var combinedState = new InputState();
+
+        foreach (var state in states)
+        {
+            combinedState.Up = combinedState.Up > 0 ? combinedState.Up : state.Up;
+            combinedState.Down = combinedState.Down > 0 ? combinedState.Down : state.Down;
+            combinedState.Left = combinedState.Left > 0 ? combinedState.Left : state.Left;
+            combinedState.Right = combinedState.Right > 0 ? combinedState.Right : state.Right;
+            combinedState.Jump = combinedState.Jump || state.Jump;
+            combinedState.Shoot = combinedState.Shoot || state.Shoot;
+            combinedState.AimVector =
+                combinedState.AimVector != Vector2.Zero ? combinedState.AimVector : state.AimVector;
+            combinedState.MousePosition =
+                combinedState.MousePosition != Vector2.Zero
+                    ? combinedState.MousePosition
+                    : state.MousePosition;
+        }
+
+        return combinedState;
     }
 
     public InputState GetState()
