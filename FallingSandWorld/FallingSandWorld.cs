@@ -36,7 +36,7 @@ class FallingSandWorld
         ChunkPool.Initialize(100);
 
         // Create a thread pool
-        for (int i = 0; i < 3; i++)
+        for (int i = 0; i < 4; i++)
         {
             var resetEvent = new ManualResetEventSlim(false);
             WorkerEvents.Add(resetEvent);

@@ -20,29 +20,50 @@ class PhysicsSystem : ISystem
     {
         ECSWorld = ecsWorld;
         PhysicsWorld = physicsWorld;
-        PhysicsWorld.Gravity = new nkast.Aether.Physics2D.Common.Vector2(0, 10f);
+        // PhysicsWorld.Gravity = new Vector2(0, 9.8f);
+        PhysicsWorld.Gravity = new Vector2(0, 0);
     }
 
     public void CreatePhysicsBodies()
     {
         // Find entities with a physics component but no created physics body
-        var query = new QueryDescription().WithAny<CirclePhysicsBodyComponent>();
+        var query = new QueryDescription().WithAny<
+            CirclePhysicsBodyComponent,
+            RectanglePhysicsBodyComponent
+        >();
         ECSWorld.Query(
             in query,
-            (Arch.Core.Entity entity, ref CirclePhysicsBodyComponent circle) =>
+            (
+                Arch.Core.Entity entity,
+                ref CirclePhysicsBodyComponent circle,
+                ref RectanglePhysicsBodyComponent rect
+            ) =>
             {
                 if (!entity.Has<PhysicsBodyComponent>())
                 {
                     // Create a physics body for the entity
-                    if (circle != null)
+                    if (entity.Has<CirclePhysicsBodyComponent>())
                     {
                         var bodyRef = PhysicsWorld.CreateCircle(
-                            circle.Radius,
+                            Convert.PixelsToMeters(circle.Radius),
                             circle.Density,
-                            new nkast.Aether.Physics2D.Common.Vector2(
-                                circle.InitialPosition.X,
-                                circle.InitialPosition.Y
+                            Convert.PixelsToMeters(
+                                new Vector2(circle.InitialPosition.X, circle.InitialPosition.Y)
                             ),
+                            BodyType.Dynamic
+                        );
+                        entity.Add(new PhysicsBodyComponent(bodyRef));
+                    }
+                    if (entity.Has<RectanglePhysicsBodyComponent>())
+                    {
+                        var bodyRef = PhysicsWorld.CreateRectangle(
+                            Convert.PixelsToMeters(rect.Width),
+                            Convert.PixelsToMeters(rect.Height),
+                            rect.Density,
+                            Convert.PixelsToMeters(
+                                new Vector2(rect.InitialPosition.X, rect.InitialPosition.Y)
+                            ),
+                            rotation: 0,
                             BodyType.Dynamic
                         );
                         entity.Add(new PhysicsBodyComponent(bodyRef));
@@ -67,18 +88,19 @@ class PhysicsSystem : ISystem
                     // Update the physics object based on the input state
                     var inputState = entity.Get<InputStateComponent>().Value;
                     var inputVector =
-                        new nkast.Aether.Physics2D.Common.Vector2(
+                        new Vector2(
                             inputState.Left - inputState.Right,
                             inputState.Up - inputState.Down
-                        ) * -100f;
-                    physicsBody.PhysicsBodyRef.ApplyForce(inputVector);
+                        ) * -10f;
+                    physicsBody.PhysicsBodyRef.ApplyLinearImpulse(
+                        Convert.PixelsToMeters(inputVector)
+                    );
                 }
                 if (entity.Has<PositionComponent>())
                 {
                     // Update the position based on the physics object's position
-                    entity.Get<PositionComponent>().Value = new Microsoft.Xna.Framework.Vector2(
-                        physicsBody.PhysicsBodyRef.WorldCenter.X,
-                        physicsBody.PhysicsBodyRef.WorldCenter.Y
+                    entity.Get<PositionComponent>().Value = Convert.MetersToPixels(
+                        physicsBody.PhysicsBodyRef.WorldCenter
                     );
                 }
                 if (entity.Has<BoundingBoxComponent>())

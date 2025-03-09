@@ -28,7 +28,7 @@ class GameChunk
 
     private readonly object polysUpdatedLock = new();
     private bool polysUpdated = false;
-    private readonly ConcurrentBag<FallingSandWorldChunkBody> FallingSandWorldChunkPolys = [];
+    private readonly ConcurrentBag<Vertices> FallingSandWorldChunkPolys = [];
 
     // thread-safe list
     private readonly ConcurrentBag<Body> PhysicsBodies = new();
@@ -130,16 +130,83 @@ class GameChunk
         return new WorldPosition(localPosition.X + WorldOrigin.X, localPosition.Y + WorldOrigin.Y);
     }
 
-    // public FallingSandPixel GetPixel(LocalPosition localPosition)
-    // {
-    //     if (!HasGeneratedMap)
-    //     {
-    //         return null;
-    //     }
+    public void DebugDrawPhysicsPolys()
+    {
+        (VertexPositionColor[] vertices, int[] indices) CreateFilledPolygon(
+            List<Microsoft.Xna.Framework.Vector2> points,
+            Microsoft.Xna.Framework.Color color
+        )
+        {
+            if (points.Count < 3)
+                return (null, null);
 
-    //     var sandChunk = SandWorld.GetOrCreateChunkFromWorldPosition(WorldOrigin);
-    //     return SandChunk.GetPixel(localPosition);
-    // }
+            // Create vertices (one for each point plus one for the center)
+            var _vertices = new VertexPositionColor[points.Count + 1];
+
+            // Calculate center point by averaging all vertices
+            Vector2 center = Vector2.Zero;
+            foreach (Vector2 point in points)
+            {
+                center += point;
+            }
+            center /= points.Count;
+
+            // Center vertex
+            _vertices[0] = new VertexPositionColor(new Vector3(center.X, center.Y, 0), color);
+
+            // Outer vertices
+            for (int i = 0; i < points.Count; i++)
+            {
+                _vertices[i + 1] = new VertexPositionColor(
+                    new Vector3(points[i].X, points[i].Y, 0),
+                    color
+                );
+            }
+
+            // Create indices for a triangle fan (converted to triangle list)
+            var _indices = new int[points.Count * 3];
+            for (int i = 0; i < points.Count; i++)
+            {
+                _indices[i * 3] = 0; // Center vertex
+                _indices[i * 3 + 1] = 1 + i;
+                _indices[i * 3 + 2] = 1 + ((i + 1) % points.Count);
+            }
+
+            return (_vertices, _indices);
+        }
+
+        if (FallingSandWorldChunkPolys != null)
+        {
+            foreach (var group in FallingSandWorldChunkPolys)
+            {
+                // Scale the vertices to the physics world
+                var scaledGroup = group.Select(v => Convert.MetersToPixels(v)).ToList();
+                var (vertices, indices) = CreateFilledPolygon(
+                    scaledGroup,
+                    new Microsoft.Xna.Framework.Color(0, 255, 0, 50) // Added semi-transparency
+                );
+
+                if (vertices != null && indices != null)
+                {
+                    foreach (EffectPass pass in BasicEffect.CurrentTechnique.Passes)
+                    {
+                        pass.Apply();
+
+                        // Draw the polygon
+                        GraphicsDevice.DrawUserIndexedPrimitives(
+                            PrimitiveType.TriangleList,
+                            vertices,
+                            0, // vertex buffer offset
+                            vertices.Length, // number of vertices
+                            indices,
+                            0, // index buffer offset
+                            indices.Length / 3 // number of primitives (triangles)
+                        );
+                    }
+                }
+            }
+        }
+    }
 
     // Draw to the render target
     public void Draw()
@@ -155,7 +222,7 @@ class GameChunk
         var pixelsToRender = new List<LocalPosition>();
 
         // Pull 1000 pixels at a time to reduce fps drops
-        while (SandChunk.pixelsToDraw.TryTake(out var position) && pixelsToRender.Count < 10000)
+        while (SandChunk.pixelsToDraw.TryTake(out var position) && pixelsToRender.Count < 1000)
         {
             pixelsToRender.Add(position);
         }
@@ -181,123 +248,36 @@ class GameChunk
                 );
             }
 
-            // (VertexPositionColor[] vertices, int[] indices) CreateFilledPolygon(
-            //     List<Microsoft.Xna.Framework.Vector2> points,
-            //     Microsoft.Xna.Framework.Color color
-            // )
-            // {
-            //     if (points.Count < 3)
-            //         return (null, null);
-
-            //     // Create vertices (one for each point plus one for the center)
-            //     var _vertices = new VertexPositionColor[points.Count + 1];
-
-            //     // Calculate center point by averaging all vertices
-            //     Microsoft.Xna.Framework.Vector2 center = Microsoft.Xna.Framework.Vector2.Zero;
-            //     foreach (Microsoft.Xna.Framework.Vector2 point in points)
-            //     {
-            //         center += point;
-            //     }
-            //     center /= points.Count;
-
-            //     // Center vertex
-            //     _vertices[0] = new VertexPositionColor(
-            //         new Microsoft.Xna.Framework.Vector3(center.X, center.Y, 0),
-            //         color
-            //     );
-
-            //     // Outer vertices
-            //     for (int i = 0; i < points.Count; i++)
-            //     {
-            //         _vertices[i + 1] = new VertexPositionColor(
-            //             new Microsoft.Xna.Framework.Vector3(points[i].X, points[i].Y, 0),
-            //             color
-            //         );
-            //     }
-
-            //     // Create indices for a triangle fan (converted to triangle list)
-            //     var _indices = new int[points.Count * 3];
-            //     for (int i = 0; i < points.Count; i++)
-            //     {
-            //         _indices[i * 3] = 0; // Center vertex
-            //         _indices[i * 3 + 1] = 1 + i;
-            //         _indices[i * 3 + 2] = 1 + ((i + 1) % points.Count);
-            //     }
-
-            //     return (_vertices, _indices);
-            // }
-
-            // if (FallingSandWorldChunkPolys != null)
-            // {
-            //     // End the sprite batch before drawing with custom effect
-            //     SpriteBatch.End();
-
-            //     foreach (var group in FallingSandWorldChunkPolys)
-            //     {
-            //         foreach (var polygon in group.Polygons)
-            //         {
-            //             // Transform vertices from world space to local render target space
-            //             var physicsObjectVertices = polygon
-            //                 .Select(v => new Microsoft.Xna.Framework.Vector2(v.X, v.Y))
-            //                 .ToList();
-
-            //             var (vertices, indices) = CreateFilledPolygon(
-            //                 physicsObjectVertices,
-            //                 new Microsoft.Xna.Framework.Color(0, 255, 0, 50) // Added semi-transparency
-            //             );
-
-            //             if (vertices != null && indices != null)
-            //             {
-            //                 foreach (EffectPass pass in BasicEffect.CurrentTechnique.Passes)
-            //                 {
-            //                     pass.Apply();
-
-            //                     // Draw the polygon
-            //                     GraphicsDevice.DrawUserIndexedPrimitives(
-            //                         PrimitiveType.TriangleList,
-            //                         vertices,
-            //                         0, // vertex buffer offset
-            //                         vertices.Length, // number of vertices
-            //                         indices,
-            //                         0, // index buffer offset
-            //                         indices.Length / 3 // number of primitives (triangles)
-            //                     );
-            //                 }
-            //             }
-            //         }
-            //     }
-            //     // Start sprite batch again for any remaining rendering
-            //     SpriteBatch.Begin();
-            // }
-
             SpriteBatch.End();
         }
 
         // Draw outline
-        // var outlineColor = new Microsoft.Xna.Framework.Color(255, 0, 0);
-        // if (SandChunk.isAwake)
-        // {
-        //     outlineColor = new Microsoft.Xna.Framework.Color(0, 255, 0);
-        // }
+        var outlineColor = new Microsoft.Xna.Framework.Color(255, 0, 0);
+        if (SandChunk.isAwake)
+        {
+            outlineColor = new Microsoft.Xna.Framework.Color(0, 255, 0);
+        }
 
-        // SpriteBatch.Begin();
-        // SpriteBatch.Draw(PixelTexture, new Rectangle(0, 0, Constants.CHUNK_WIDTH, 1), outlineColor);
-        // SpriteBatch.Draw(
-        //     PixelTexture,
-        //     new Rectangle(0, 0, 1, Constants.CHUNK_HEIGHT),
-        //     outlineColor
-        // );
-        // SpriteBatch.Draw(
-        //     PixelTexture,
-        //     new Rectangle(Constants.CHUNK_WIDTH - 1, 0, 1, Constants.CHUNK_HEIGHT),
-        //     outlineColor
-        // );
-        // SpriteBatch.Draw(
-        //     PixelTexture,
-        //     new Rectangle(0, Constants.CHUNK_HEIGHT - 1, Constants.CHUNK_WIDTH, 1),
-        //     outlineColor
-        // );
-        // SpriteBatch.End();
+        SpriteBatch.Begin();
+        SpriteBatch.Draw(PixelTexture, new Rectangle(0, 0, Constants.CHUNK_WIDTH, 1), outlineColor);
+        SpriteBatch.Draw(
+            PixelTexture,
+            new Rectangle(0, 0, 1, Constants.CHUNK_HEIGHT),
+            outlineColor
+        );
+        SpriteBatch.Draw(
+            PixelTexture,
+            new Rectangle(Constants.CHUNK_WIDTH - 1, 0, 1, Constants.CHUNK_HEIGHT),
+            outlineColor
+        );
+        SpriteBatch.Draw(
+            PixelTexture,
+            new Rectangle(0, Constants.CHUNK_HEIGHT - 1, Constants.CHUNK_WIDTH, 1),
+            outlineColor
+        );
+        SpriteBatch.End();
+
+        // DebugDrawPhysicsPolys();
 
         GraphicsDevice.SetRenderTarget(null);
     }
@@ -331,26 +311,16 @@ class GameChunk
             }
             PhysicsBodies.Clear();
 
-            foreach (var group in FallingSandWorldChunkPolys)
+            foreach (var vertices in FallingSandWorldChunkPolys)
             {
-                foreach (var polygon in group.Polygons)
-                {
-                    // Convert to a physics body
-                    var vertices = new Vertices(
-                        polygon.Select(v => new nkast.Aether.Physics2D.Common.Vector2(v.X, v.Y))
-                    );
-                    var newBody = PhysicsWorld.CreatePolygon(
-                        vertices: vertices,
-                        density: 1,
-                        position: new nkast.Aether.Physics2D.Common.Vector2(
-                            WorldOrigin.X,
-                            WorldOrigin.Y
-                        )
-                    );
-                    newBody.BodyType = BodyType.Static;
+                var newBody = PhysicsWorld.CreatePolygon(
+                    vertices: vertices,
+                    density: 1,
+                    position: Convert.PixelsToMeters(new Vector2(WorldOrigin.X, WorldOrigin.Y))
+                );
+                newBody.BodyType = BodyType.Static;
 
-                    PhysicsBodies.Add(newBody);
-                }
+                PhysicsBodies.Add(newBody);
             }
             lock (polysUpdatedLock)
             {
@@ -378,9 +348,11 @@ class GameChunk
 
         var sandChunk = SandWorld.GetOrCreateChunkFromWorldPosition(WorldOrigin);
 
-        var result = FallingSandWorldChunkBody.Generate(sandChunk);
+        var result = PhysicsBodyGenerator.Generate(sandChunk);
         if (result != null)
         {
+            FallingSandWorldChunkPolys.Clear();
+
             // Copy to the concurrent bag
             foreach (var item in result)
             {

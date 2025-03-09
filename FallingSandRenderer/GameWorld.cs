@@ -33,7 +33,8 @@ class GameWorld
         string seed,
         SpriteBatch spriteBatch,
         GraphicsDevice graphicsDevice,
-        nkast.Aether.Physics2D.Dynamics.World physicsWorld
+        nkast.Aether.Physics2D.Dynamics.World physicsWorld,
+        FallingSandWorld.FallingSandWorld sandWorld
     )
     {
         var generator = new FallingSandWorldGenerator(
@@ -46,7 +47,7 @@ class GameWorld
                 BiomeTransitionSize = 0.2f,
             }
         );
-        sandWorld = new FallingSandWorld.FallingSandWorld(new WorldPosition(1000, 1000));
+        this.sandWorld = sandWorld;
         this.physicsWorld = physicsWorld;
 
         this.spriteBatch = spriteBatch;
@@ -123,7 +124,7 @@ class GameWorld
         var end = visibleEnd;
 
         // Add some padding to the start and end positions
-        var paddingAmount = 0;
+        var paddingAmount = Constants.OFF_SCREEN_CHUNK_UPDATE_RADIUS;
         start = new WorldPosition(
             start.X - Constants.CHUNK_WIDTH * paddingAmount,
             start.Y - Constants.CHUNK_HEIGHT * paddingAmount
@@ -134,7 +135,6 @@ class GameWorld
         );
 
         sandWorld.Update(start, end);
-        // sandWorld.UpdateSynchronously(start, end);
     }
 
     public void Update(GameTime gameTime)
@@ -162,8 +162,8 @@ class GameWorld
 
         foreach (var (pos, chunk) in chunks)
         {
-            // Update the chunk every 100ms
-            if (chunk.lastUpdateTime > gameTime.TotalGameTime.TotalMilliseconds - 100)
+            // Update the chunk every so often
+            if (chunk.lastUpdateTime > gameTime.TotalGameTime.TotalMilliseconds - 300)
             {
                 continue;
             }

@@ -22,10 +22,11 @@ public class Game1 : Game
     private SpriteBatch _spriteBatch;
 
     private readonly FallingSandRenderer.GameWorld gameWorld;
+    private FallingSandWorld.FallingSandWorld sandWorld;
     private double lastFpsTime;
 
-    private readonly int worldSizeX = 800;
-    private readonly int worldSizeY = 600;
+    private readonly int worldSizeX = 1920;
+    private readonly int worldSizeY = 1080;
 
     private Material paintMaterial = Material.Sand;
     private FallingSandWorld.Color paintColor = new(255, 255, 0);
@@ -42,7 +43,7 @@ public class Game1 : Game
         Content.RootDirectory = "Content";
         IsMouseVisible = true;
 
-        _graphics.SynchronizeWithVerticalRetrace = true;
+        _graphics.SynchronizeWithVerticalRetrace = false;
         IsFixedTimeStep = false;
 
         gameWorld = new();
@@ -55,9 +56,11 @@ public class Game1 : Game
     {
         Camera.SetPosition(new WorldPosition(64, 64));
         Camera.SetSize(new WorldPosition(worldSizeX, worldSizeY));
-        Camera.SetZoom(1.0f);
+        Camera.SetZoom(2.0f);
 
-        systemManager.RegisterSystems(physicsWorld);
+        sandWorld = new FallingSandWorld.FallingSandWorld(new WorldPosition(1000, 1000));
+
+        systemManager.RegisterSystems(physicsWorld, sandWorld);
 
         // Create a player entity
         ecsWorld.Create(
@@ -67,7 +70,9 @@ public class Game1 : Game
             new InputReceiverComponent(),
             new InputStateComponent(),
             new CameraFollowComponent(),
-            new CirclePhysicsBodyComponent(10.0f, 10.0f, new WorldPosition(100, 100))
+            // new CirclePhysicsBodyComponent(8, 8, new WorldPosition(100, 100)),
+            new RectanglePhysicsBodyComponent(16, 16, 10, new WorldPosition(100, 100)),
+            new SandPixelReaderComponent()
         );
 
         base.Initialize();
@@ -76,7 +81,7 @@ public class Game1 : Game
     protected override void LoadContent()
     {
         _spriteBatch = new SpriteBatch(GraphicsDevice);
-        gameWorld.Init("hello", _spriteBatch, GraphicsDevice, physicsWorld);
+        gameWorld.Init("hello", _spriteBatch, GraphicsDevice, physicsWorld, sandWorld);
         systemManager.InitializeGraphics(GraphicsDevice);
     }
 
