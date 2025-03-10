@@ -7,7 +7,7 @@ namespace FallingSandWorld;
 class FallingSandWorldChunkPool
 {
     private readonly object poolLock = new();
-    private readonly Stack<FallingSandWorldChunk> pool = new Stack<FallingSandWorldChunk>();
+    private readonly Stack<FallingSandWorldChunk> pool = new();
     private readonly FallingSandWorld parentWorld;
 
     public FallingSandWorldChunkPool(FallingSandWorld parentWorld)
@@ -50,7 +50,6 @@ class FallingSandWorldChunkPool
         lock (poolLock)
         {
             chunk.Sleep();
-            chunk.ClearDrawQueue();
             pool.Push(chunk);
         }
     }

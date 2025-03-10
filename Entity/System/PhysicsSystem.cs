@@ -24,51 +24,48 @@ class PhysicsSystem : ISystem
         PhysicsWorld.Gravity = new Vector2(0, 0);
     }
 
-    public void CreatePhysicsBodies()
+    private void CreatePhysicsBodies()
     {
         // Find entities with a physics component but no created physics body
-        var query = new QueryDescription().WithAny<
-            CirclePhysicsBodyComponent,
-            RectanglePhysicsBodyComponent
-        >();
+        var circleQuery = new QueryDescription()
+            .WithAll<CirclePhysicsBodyComponent>()
+            .WithNone<PhysicsBodyComponent>();
+        var rectangleQuery = new QueryDescription()
+            .WithAll<RectanglePhysicsBodyComponent>()
+            .WithNone<PhysicsBodyComponent>();
+
         ECSWorld.Query(
-            in query,
-            (
-                Arch.Core.Entity entity,
-                ref CirclePhysicsBodyComponent circle,
-                ref RectanglePhysicsBodyComponent rect
-            ) =>
+            in circleQuery,
+            (Arch.Core.Entity entity, ref CirclePhysicsBodyComponent circle) =>
             {
-                if (!entity.Has<PhysicsBodyComponent>())
-                {
-                    // Create a physics body for the entity
-                    if (entity.Has<CirclePhysicsBodyComponent>())
-                    {
-                        var bodyRef = PhysicsWorld.CreateCircle(
-                            Convert.PixelsToMeters(circle.Radius),
-                            circle.Density,
-                            Convert.PixelsToMeters(
-                                new Vector2(circle.InitialPosition.X, circle.InitialPosition.Y)
-                            ),
-                            BodyType.Dynamic
-                        );
-                        entity.Add(new PhysicsBodyComponent(bodyRef));
-                    }
-                    if (entity.Has<RectanglePhysicsBodyComponent>())
-                    {
-                        var bodyRef = PhysicsWorld.CreateRectangle(
-                            Convert.PixelsToMeters(rect.Width),
-                            Convert.PixelsToMeters(rect.Height),
-                            rect.Density,
-                            Convert.PixelsToMeters(
-                                new Vector2(rect.InitialPosition.X, rect.InitialPosition.Y)
-                            ),
-                            rotation: 0,
-                            BodyType.Dynamic
-                        );
-                        entity.Add(new PhysicsBodyComponent(bodyRef));
-                    }
-                }
+                // Create a physics body for the entity
+                var bodyRef = PhysicsWorld.CreateCircle(
+                    Convert.PixelsToMeters(circle.Radius),
+                    circle.Density,
+                    Convert.PixelsToMeters(
+                        new Vector2(circle.InitialPosition.X, circle.InitialPosition.Y)
+                    ),
+                    BodyType.Dynamic
+                );
+                entity.Add(new PhysicsBodyComponent(bodyRef));
+            }
+        );
+
+        ECSWorld.Query(
+            in rectangleQuery,
+            (Arch.Core.Entity entity, ref RectanglePhysicsBodyComponent rect) =>
+            {
+                var bodyRef = PhysicsWorld.CreateRectangle(
+                    Convert.PixelsToMeters(rect.Width),
+                    Convert.PixelsToMeters(rect.Height),
+                    rect.Density,
+                    Convert.PixelsToMeters(
+                        new Vector2(rect.InitialPosition.X, rect.InitialPosition.Y)
+                    ),
+                    rotation: 0,
+                    BodyType.Dynamic
+                );
+                entity.Add(new PhysicsBodyComponent(bodyRef));
             }
         );
     }
@@ -98,9 +95,13 @@ class PhysicsSystem : ISystem
                 }
                 if (entity.Has<PositionComponent>())
                 {
+                    var positionComponent = entity.Get<PositionComponent>();
                     // Update the position based on the physics object's position
-                    entity.Get<PositionComponent>().Value = Convert.MetersToPixels(
+                    positionComponent.Position = Convert.MetersToPixels(
                         physicsBody.PhysicsBodyRef.WorldCenter
+                    );
+                    positionComponent.Velocity = Convert.MetersToPixels(
+                        physicsBody.PhysicsBodyRef.LinearVelocity
                     );
                 }
                 if (entity.Has<BoundingBoxComponent>())

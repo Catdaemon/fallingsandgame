@@ -16,31 +16,33 @@ class FallingSandWorld
     // These chunks are stored in a dictionary with the key being the chunk's x/y index
     // These indexes are calculated by dividing the world x/y position by the chunk width/height
     // This allows us to quickly look up chunks by their x/y position, or convert a world x/y position to a chunk x/y position
-    private readonly object SandChunksLock = new();
-    private readonly Dictionary<ChunkPosition, FallingSandWorldChunk> SandChunks = [];
+    private readonly ConcurrentDictionary<ChunkPosition, FallingSandWorldChunk> SandChunks = [];
     private readonly FallingSandWorldChunkPool ChunkPool;
     public long CurrentFrameId = 0;
 
     // Pool of threads for updating chunks
     private readonly List<Thread> Threads = [];
-    private readonly BlockingCollection<FallingSandWorldChunk> ChunksToUpdate = [];
+    private readonly ConcurrentBag<FallingSandWorldChunk> ChunksToUpdate = [];
     private readonly List<ManualResetEventSlim> WorkerEvents = [];
     private volatile bool ShuttingDown = false;
-    private readonly object WorldLock = new();
 
     public FallingSandWorld(WorldPosition extents)
     {
         Extents = extents;
 
         ChunkPool = new FallingSandWorldChunkPool(this);
-        ChunkPool.Initialize(100);
+        ChunkPool.Initialize(200);
 
         // Create a thread pool
-        for (int i = 0; i < 4; i++)
+        for (int i = 0; i < 2; i++)
         {
             var resetEvent = new ManualResetEventSlim(false);
             WorkerEvents.Add(resetEvent);
-            Threads.Add(new Thread(() => WorkerThreadFunction(resetEvent)));
+            var newThread = new Thread(() => WorkerThreadFunction(resetEvent))
+            {
+                IsBackground = true,
+            };
+            Threads.Add(newThread);
         }
 
         Threads.ForEach(thread => thread.Start());
@@ -108,18 +110,15 @@ class FallingSandWorld
     public FallingSandWorldChunk GetOrCreateChunkFromChunkPosition(ChunkPosition chunkPos)
     {
         // Check to see if we already have a chunk at this position
-        lock (SandChunksLock)
+        if (SandChunks.TryGetValue(chunkPos, out var chunk))
         {
-            if (SandChunks.TryGetValue(chunkPos, out var chunk))
-            {
-                return chunk;
-            }
-
-            var newChunk = ChunkPool.Get(chunkPos);
-            SandChunks.Add(chunkPos, newChunk);
-
-            return newChunk;
+            return chunk;
         }
+
+        var newChunk = ChunkPool.Get(chunkPos);
+        SandChunks.AddOrUpdate(chunkPos, newChunk, (key, oldValue) => newChunk);
+
+        return newChunk;
     }
 
     public IEnumerable<FallingSandWorldChunk> GetChunksInBBox(
@@ -155,25 +154,42 @@ class FallingSandWorld
         chunk.SetPixel(localPosition, pixel, velocity);
     }
 
-    public void SetPixelBatch(WorldPosition startPos, FallingSandPixelData[] pixels, int width)
-    {
-        lock (WorldLock) // One lock for the entire operation
-        {
-            int height = pixels.Length / width;
+    // public void SetPixelBatch(FallingSandWorldChunk chunk, FallingSandPixelData[] pixels, int width)
+    // {
+    //     int height = pixels.Length / width;
 
-            for (int y = 0; y < height; y++)
-            {
-                for (int x = 0; x < width; x++)
-                {
-                    int worldX = startPos.X + x;
-                    int worldY = startPos.Y + y;
+    //     // Group pixels by their chunk
+    //     var pixelsByChunk =
+    //         new Dictionary<ChunkPosition, List<(LocalPosition, FallingSandPixelData)>>();
 
-                    // Apply the pixel without individual locking
-                    SetPixel(new WorldPosition(worldX, worldY), pixels[y * width + x]);
-                }
-            }
-        }
-    }
+    //     for (int y = 0; y < height; y++)
+    //     {
+    //         for (int x = 0; x < width; x++)
+    //         {
+    //             int worldX = startPos.X + x;
+    //             int worldY = startPos.Y + y;
+    //             var worldPos = new WorldPosition(worldX, worldY);
+    //             var chunkPos = WorldToChunkPosition(worldPos);
+    //             var localPos = WorldToLocalPosition(worldPos);
+
+    //             if (!pixelsByChunk.TryGetValue(chunkPos, out var pixelList))
+    //             {
+    //                 pixelList = new List<(LocalPosition, FallingSandPixelData)>();
+    //                 pixelsByChunk[chunkPos] = pixelList;
+    //             }
+
+    //             pixelList.Add((localPos, pixels[y * width + x]));
+    //         }
+    //     }
+
+    //     // Apply pixels by chunk
+    //     foreach (var (chunkPos, pixelList) in pixelsByChunk)
+    //     {
+    //         var chunk = GetOrCreateChunkFromChunkPosition(chunkPos);
+    //         // Batch apply pixels to chunk
+    //         chunk.SetPixelBatch(pixelList);
+    //     }
+    // }
 
     public FallingSandPixel GetPixel(WorldPosition worldPosition)
     {
@@ -250,15 +266,11 @@ class FallingSandWorld
 
     public void UnloadChunks(IEnumerable<ChunkPosition> chunksToUnload)
     {
-        lock (SandChunksLock)
+        foreach (var chunkPos in chunksToUnload)
         {
-            foreach (var chunkPos in chunksToUnload)
+            if (SandChunks.TryRemove(chunkPos, out var chunk))
             {
-                if (SandChunks.TryGetValue(chunkPos, out var chunk))
-                {
-                    SandChunks.Remove(chunkPos);
-                    ChunkPool.Return(chunk);
-                }
+                ChunkPool.Return(chunk);
             }
         }
     }

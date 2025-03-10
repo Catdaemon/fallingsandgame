@@ -10,7 +10,7 @@ class AsyncChunkGenerator
 {
     private readonly List<Thread> Threads = [];
     private bool IsRunning = false;
-    private readonly ConcurrentQueue<ChunkPosition> ChunksToGenerate = new();
+    private readonly ConcurrentBag<ChunkPosition> ChunksToGenerate = [];
     private readonly GameWorld World;
     private readonly ManualResetEvent WaitHandle = new ManualResetEvent(false);
 
@@ -20,7 +20,8 @@ class AsyncChunkGenerator
 
         for (int i = 0; i < 1; i++)
         {
-            Threads.Add(new Thread(DoWork));
+            var newThread = new Thread(DoWork) { IsBackground = true };
+            Threads.Add(newThread);
         }
     }
 
@@ -28,7 +29,7 @@ class AsyncChunkGenerator
     {
         while (IsRunning)
         {
-            if (ChunksToGenerate.TryDequeue(out ChunkPosition chunkPosition))
+            if (ChunksToGenerate.TryTake(out ChunkPosition chunkPosition))
             {
                 var chunk = World.GetOrCreateChunkFromChunkPosition(chunkPosition);
                 // This is a noop if the chunk has already been generated
@@ -61,7 +62,7 @@ class AsyncChunkGenerator
         // Only add if not already in queue
         if (!ChunksToGenerate.Contains(chunkPosition))
         {
-            ChunksToGenerate.Enqueue(chunkPosition);
+            ChunksToGenerate.Add(chunkPosition);
             WaitHandle.Set(); // Signal waiting threads
             WaitHandle.Reset();
         }

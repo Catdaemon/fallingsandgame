@@ -42,7 +42,14 @@ class FallingSandWorldChunk
         ChunkPos = newPosition;
         isAwake = true;
         // ClearDrawQueue();
-        // InitializePixels();
+        // Clear all pixels
+        for (int x = 0; x < Constants.CHUNK_WIDTH; x++)
+        {
+            for (int y = 0; y < Constants.CHUNK_HEIGHT; y++)
+            {
+                pixels[x, y].Empty();
+            }
+        }
     }
 
     public void Wake()
@@ -174,19 +181,36 @@ class FallingSandWorldChunk
     public void SetPixel(
         LocalPosition localPosition,
         FallingSandPixelData newPixelData,
-        float velocity = 1
+        float velocity = 1,
+        bool isBulkOperation = false
     )
     {
         if (!IsInBounds(localPosition))
         {
-            // Console.WriteLine(
-            //     $"Tried to set pixel outside of chunk: {localPosition.X}, {localPosition.Y}"
-            // );
             return;
         }
+
         pixels[localPosition.X, localPosition.Y].Set(newPixelData, velocity);
-        AddPixelToDrawQueue(localPosition);
+
+        if (!isBulkOperation)
+        {
+            AddPixelToDrawQueue(localPosition);
+            Wake();
+        }
+    }
+
+    public void SetPixelBatch(FallingSandPixelData[] pixels)
+    {
+        Sleep();
+        for (int y = 0; y < Constants.CHUNK_HEIGHT; y++)
+        {
+            for (int x = 0; x < Constants.CHUNK_WIDTH; x++)
+            {
+                SetPixel(new LocalPosition(x, y), pixels[y * Constants.CHUNK_WIDTH + x], 1, true);
+            }
+        }
         Wake();
+        MarkEntireChunkForRedraw();
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -207,6 +231,17 @@ class FallingSandWorldChunk
     public void AddPixelToDrawQueue(LocalPosition position)
     {
         pixelsToDraw.Add(position);
+    }
+
+    public void MarkEntireChunkForRedraw()
+    {
+        for (int y = 0; y < Constants.CHUNK_HEIGHT; y++)
+        {
+            for (int x = 0; x < Constants.CHUNK_WIDTH; x++)
+            {
+                AddPixelToDrawQueue(new LocalPosition(x, y));
+            }
+        }
     }
 
     public void ClearDrawQueue()

@@ -114,9 +114,11 @@ class GameChunk
             }
         }
 
-        SandWorld.SetPixelBatch(WorldOrigin, pixelBuffer, Constants.CHUNK_WIDTH);
-
         SandChunk = SandWorld.GetOrCreateChunkFromWorldPosition(WorldOrigin);
+
+        // Root of performance issue
+        SandChunk.SetPixelBatch(pixelBuffer);
+
         SandChunk.Wake();
 
         HasGeneratedMap = true;
@@ -220,37 +222,28 @@ class GameChunk
 
         GraphicsDevice.SetRenderTarget(RenderTarget);
 
-        // Pull the pixels out of the queue into this thread to reduce contention
-        var pixelsToRender = new List<LocalPosition>();
-
-        // Pull 1000 pixels at a time to reduce fps drops
-        while (SandChunk.pixelsToDraw.TryTake(out var position) && pixelsToRender.Count < 1000)
-        {
-            pixelsToRender.Add(position);
-        }
-
-        if (pixelsToRender.Count > 0)
+        var renderedPixels = 0;
+        while (SandChunk.pixelsToDraw.TryTake(out var position) && renderedPixels < 500)
         {
             SpriteBatch.Begin();
 
-            foreach (var position in pixelsToRender)
-            {
-                // Get pixel data
-                var pixelData = SandChunk.GetPixel(position).Data;
+            // Get pixel data
+            var pixelData = SandChunk.GetPixel(position).Data;
 
-                // Draw to render target in the correct position
-                SpriteBatch.Draw(
-                    PixelTexture,
-                    new Rectangle(position.X, position.Y, 1, 1),
-                    new Microsoft.Xna.Framework.Color(
-                        pixelData.Color.R,
-                        pixelData.Color.G,
-                        pixelData.Color.B
-                    )
-                );
-            }
+            // Draw to render target in the correct position
+            SpriteBatch.Draw(
+                PixelTexture,
+                new Rectangle(position.X, position.Y, 1, 1),
+                new Microsoft.Xna.Framework.Color(
+                    pixelData.Color.R,
+                    pixelData.Color.G,
+                    pixelData.Color.B
+                )
+            );
 
             SpriteBatch.End();
+
+            renderedPixels++;
         }
 
         // Draw outline

@@ -33,7 +33,7 @@ class SandInteractionSystemSystem : ISystem
                 ref PositionComponent positionComponent
             ) =>
             {
-                var position = positionComponent.Value;
+                var position = positionComponent.Position;
                 var sand = SandWorld.GetPixel(new WorldPosition((int)position.X, (int)position.Y));
                 sandComponent.Material = sand.Data.Material;
             }

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using Arch.Core;
 using FallingSand.Entity.System;
@@ -12,7 +13,7 @@ namespace FallingSand.FallingSandRenderer;
 class GameWorld
 {
     private const int TARGET_SAND_FPS = 60;
-    private readonly Dictionary<ChunkPosition, GameChunk> gameChunks = [];
+    private readonly ConcurrentDictionary<ChunkPosition, GameChunk> gameChunks = [];
     public FallingSandWorld.FallingSandWorld sandWorld;
     public nkast.Aether.Physics2D.Dynamics.World physicsWorld;
     private SpriteBatch spriteBatch;
@@ -59,7 +60,7 @@ class GameWorld
             generator,
             physicsWorld
         );
-        gameChunkPool.Initialize(100);
+        gameChunkPool.Initialize(200);
 
         asyncChunkGenerator.Start();
     }
@@ -72,7 +73,7 @@ class GameWorld
             if (!chunk.HasGeneratedMap)
             {
                 asyncChunkGenerator.EnqueueChunk(position);
-                break; // Only request one chunk per update
+                // break; // Only request one chunk per update
             }
         }
     }
@@ -107,11 +108,10 @@ class GameWorld
         // Now unload them
         foreach (var position in positionsToUnload)
         {
-            if (gameChunks.TryGetValue(position, out var chunk))
+            if (gameChunks.TryRemove(position, out var chunk))
             {
                 chunk.Unload();
                 gameChunkPool.Return(chunk);
-                gameChunks.Remove(position);
             }
         }
     }
@@ -135,6 +135,7 @@ class GameWorld
         );
 
         sandWorld.Update(start, end);
+        // sandWorld.UpdateSynchronously(start, end);
     }
 
     public void Update(GameTime gameTime)
@@ -167,8 +168,8 @@ class GameWorld
             {
                 continue;
             }
-            asyncChunkGenerator.EnqueueChunk(pos);
-            chunk.Update(gameTime);
+            // asyncChunkGenerator.EnqueueChunk(pos);
+            // chunk.Update(gameTime);
             chunk.lastUpdateTime = gameTime.TotalGameTime.TotalMilliseconds;
         }
     }

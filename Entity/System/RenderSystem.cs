@@ -32,9 +32,9 @@ class RenderSystem : ISystem
     public void Draw(GameTime gameTime)
     {
         // Debug draw physics objects
-        var query = new QueryDescription().WithAny<PhysicsBodyComponent>();
+        var withPhysicsBodyQuery = new QueryDescription().WithAny<PhysicsBodyComponent>();
         World.Query(
-            in query,
+            in withPhysicsBodyQuery,
             (Arch.Core.Entity entity, ref PhysicsBodyComponent physicsBody) =>
             {
                 var body = physicsBody.PhysicsBodyRef;

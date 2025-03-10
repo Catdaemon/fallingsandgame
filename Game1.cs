@@ -25,8 +25,8 @@ public class Game1 : Game
     private FallingSandWorld.FallingSandWorld sandWorld;
     private double lastFpsTime;
 
-    private readonly int worldSizeX = 1920;
-    private readonly int worldSizeY = 1080;
+    private readonly int worldSizeX = 800;
+    private readonly int worldSizeY = 600;
 
     private Material paintMaterial = Material.Sand;
     private FallingSandWorld.Color paintColor = new(255, 255, 0);
@@ -72,7 +72,7 @@ public class Game1 : Game
             new InputStateComponent(),
             new CameraFollowComponent(),
             // new CirclePhysicsBodyComponent(8, 8, new WorldPosition(100, 100)),
-            new RectanglePhysicsBodyComponent(16, 16, 10, new WorldPosition(100, 100)),
+            new RectanglePhysicsBodyComponent(16, 16, 10, new WorldPosition(50, 100)),
             new SandPixelReaderComponent()
         );
 
@@ -143,6 +143,8 @@ public class Game1 : Game
         base.Update(gameTime);
     }
 
+    private long lastGc = 0;
+
     protected override void Draw(GameTime gameTime)
     {
         GraphicsDevice.Clear(Microsoft.Xna.Framework.Color.CornflowerBlue);
@@ -153,9 +155,16 @@ public class Game1 : Game
 
         if (gameTime.TotalGameTime.TotalMilliseconds - lastFpsTime >= 1000)
         {
-            var fps = string.Format("FPS: {0}", _frameCounter.AverageFramesPerSecond);
+            var gcSize = GC.GetTotalMemory(false) / 1024;
+            var gcHappened = gcSize < lastGc;
+            lastGc = gcSize;
+            var fps = string.Format(
+                "FPS: {0}, gc {1}",
+                _frameCounter.AverageFramesPerSecond,
+                gcHappened
+            );
 
-            Console.WriteLine($"{paintMaterial}: {fps}");
+            // Console.WriteLine($"{paintMaterial}: {fps}");
 
             lastFpsTime = gameTime.TotalGameTime.TotalMilliseconds;
         }

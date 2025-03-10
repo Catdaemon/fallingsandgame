@@ -1,3 +1,4 @@
+using System;
 using Arch.Core;
 using Arch.Core.Extensions;
 using FallingSand;
@@ -16,28 +17,45 @@ class CameraSystem : ISystem
         World = world;
     }
 
+    // private static QueryDescription WithFollowCameraQuery =
+    //     new QueryDescription().WithAny<CameraFollowComponent>();
+
     public void Update(GameTime gameTime)
     {
+        var delta = (float)gameTime.ElapsedGameTime.TotalSeconds;
         // Find entities with a Camera Follow component
-        var query = new QueryDescription().WithAny<CameraFollowComponent>();
+        var withFollowCameraQuery = new QueryDescription().WithAll<CameraFollowComponent>();
         World.Query(
-            in query,
-            (Arch.Core.Entity entity, ref PhysicsBodyComponent physicsBody) =>
+            in withFollowCameraQuery,
+            (Arch.Core.Entity entity, ref CameraFollowComponent _) =>
             {
                 if (entity.Has<PositionComponent>())
                 {
-                    var targetPos = entity.Get<PositionComponent>().Value;
-                    Vector2 currentPos = Camera.GetPositionF();
-                    float smoothFactor = 2f * (float)gameTime.ElapsedGameTime.TotalSeconds;
-                    Vector2 newPos = Vector2.Lerp(
-                        currentPos,
-                        new Vector2(targetPos.X, targetPos.Y),
-                        smoothFactor
+                    var positionComponent = entity.Get<PositionComponent>();
+                    // Move the camera to follow the entity
+                    var velocityOffset = positionComponent.Velocity;
+                    // Cap the velocity offset at 64, keeping in mind it can be negative
+                    var velocityFactor = new Vector2(
+                        Math.Min(Math.Max(velocityOffset.X, -64), 64),
+                        Math.Min(Math.Max(velocityOffset.Y, -64), 64)
                     );
-                    Camera.SetPosition(newPos.X, newPos.Y);
+
+                    var targetPos = positionComponent.Position + velocityFactor;
+                    // Use a smooth factor to make the camera movement less jarring
+                    // Delta time should be used to make the movement framerate-independent
+                    // float smoothFactor = 10f;
+                    // Vector2 currentPos = Camera.GetPositionF();
+                    // Vector2 newPos = Vector2.SmoothStep(
+                    //     currentPos,
+                    //     new Vector2(targetPos.X, targetPos.Y),
+                    //     smoothFactor * delta
+                    // );
+                    Camera.SetPosition(targetPos.X, targetPos.Y);
                 }
             }
         );
+
+        // Camera.SetPosition(Camera.GetPositionF().X + (50 * delta), 0);
 
         // Update the camera's copy of the mouse position
         var mouse = Mouse.GetState();
