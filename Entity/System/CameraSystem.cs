@@ -26,9 +26,15 @@ class CameraSystem : ISystem
             {
                 if (entity.Has<PositionComponent>())
                 {
-                    // Center the camera on the entity
-                    var position = entity.Get<PositionComponent>().Value;
-                    Camera.SetPosition(new WorldPosition((int)position.X, (int)position.Y));
+                    var targetPos = entity.Get<PositionComponent>().Value;
+                    Vector2 currentPos = Camera.GetPositionF();
+                    float smoothFactor = 2f * (float)gameTime.ElapsedGameTime.TotalSeconds;
+                    Vector2 newPos = Vector2.Lerp(
+                        currentPos,
+                        new Vector2(targetPos.X, targetPos.Y),
+                        smoothFactor
+                    );
+                    Camera.SetPosition(newPos.X, newPos.Y);
                 }
             }
         );

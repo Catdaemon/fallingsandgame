@@ -43,7 +43,8 @@ public class Game1 : Game
         Content.RootDirectory = "Content";
         IsMouseVisible = true;
 
-        _graphics.SynchronizeWithVerticalRetrace = false;
+        // vsync
+        _graphics.SynchronizeWithVerticalRetrace = true;
         IsFixedTimeStep = false;
 
         gameWorld = new();

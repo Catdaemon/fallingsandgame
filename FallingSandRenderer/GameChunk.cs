@@ -1,6 +1,8 @@
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using FallingSand;
 using FallingSandWorld;
 using Microsoft.Xna.Framework;
@@ -290,8 +292,7 @@ class GameChunk
         }
 
         // Look up the chunk
-        var sandChunk = SandWorld.GetOrCreateChunkFromWorldPosition(WorldOrigin);
-        if (!sandChunk.isAwake)
+        if (!SandChunk.isAwake)
         {
             return;
         }
