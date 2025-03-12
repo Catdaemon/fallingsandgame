@@ -6,13 +6,13 @@ using FallingSand;
 
 namespace FallingSand.FallingSandRenderer;
 
-class AsyncChunkGenerator
+class AsyncChunkPhysicsCalculator
 {
     private readonly List<Thread> Threads = [];
     private bool IsRunning = false;
-    private readonly ConcurrentQueue<GameChunk> ChunksToGenerate = new();
+    private readonly ConcurrentQueue<GameChunk> ChunksToUpdate = new();
 
-    public AsyncChunkGenerator(int numberOfthreads)
+    public AsyncChunkPhysicsCalculator(int numberOfthreads)
     {
         for (int i = 0; i < numberOfthreads; i++)
         {
@@ -25,9 +25,10 @@ class AsyncChunkGenerator
     {
         while (IsRunning)
         {
-            while (ChunksToGenerate.TryDequeue(out var chunkToGenerate))
+            while (ChunksToUpdate.TryDequeue(out var chunkToUpdate))
             {
-                chunkToGenerate.Generate();
+                // Update the physics polygons for the chunk
+                chunkToUpdate.UpdatePhysicsPolygons();
                 Thread.Yield();
             }
 
@@ -49,10 +50,10 @@ class AsyncChunkGenerator
 
     public void Enqueue(GameChunk chunk)
     {
-        if (ChunksToGenerate.Contains(chunk))
+        if (ChunksToUpdate.Contains(chunk))
         {
             return;
         }
-        ChunksToGenerate.Enqueue(chunk);
+        ChunksToUpdate.Enqueue(chunk);
     }
 }

@@ -16,7 +16,10 @@ class FallingSandWorld
     // These chunks are stored in a dictionary with the key being the chunk's x/y index
     // These indexes are calculated by dividing the world x/y position by the chunk width/height
     // This allows us to quickly look up chunks by their x/y position, or convert a world x/y position to a chunk x/y position
-    private readonly ConcurrentDictionary<ChunkPosition, FallingSandWorldChunk> SandChunks = [];
+    private readonly ConcurrentDictionary<ChunkPosition, FallingSandWorldChunk> SandChunks = new(
+        5,
+        Constants.INITIAL_CHUNK_POOL_SIZE
+    );
     private readonly FallingSandWorldChunkPool ChunkPool;
     public long CurrentFrameId = 0;
 
@@ -31,7 +34,7 @@ class FallingSandWorld
         Extents = extents;
 
         ChunkPool = new FallingSandWorldChunkPool(this);
-        ChunkPool.Initialize(200);
+        ChunkPool.Initialize(Constants.INITIAL_CHUNK_POOL_SIZE);
 
         // Create a thread pool
         for (int i = 0; i < 2; i++)
@@ -115,10 +118,7 @@ class FallingSandWorld
             return chunk;
         }
 
-        var newChunk = ChunkPool.Get(chunkPos);
-        SandChunks.AddOrUpdate(chunkPos, newChunk, (key, oldValue) => newChunk);
-
-        return newChunk;
+        return SandChunks.AddOrUpdate(chunkPos, ChunkPool.Get, (key, oldValue) => oldValue);
     }
 
     public IEnumerable<FallingSandWorldChunk> GetChunksInBBox(
@@ -246,7 +246,7 @@ class FallingSandWorld
         }
 
         // Wait for workers with timeout to prevent deadlocks
-        bool allFinished = WorkerEvents.All(evt => evt.Wait(100));
+        bool allFinished = WorkerEvents.All(evt => evt.Wait(10));
 
         // If timeout occurred, don't wait indefinitely
         if (!allFinished)

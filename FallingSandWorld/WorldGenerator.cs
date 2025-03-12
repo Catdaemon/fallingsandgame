@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using FallingSand;
 using FallingSandWorld.Biomes;
+using Microsoft.Xna.Framework;
 
 namespace FallingSandWorld;
 
@@ -13,15 +14,15 @@ public class WorldGeneratorConfig
     public float BiomeScale { get; set; } = 0.0005f; // Reduced from 0.005f for larger biomes
 
     // Noise configuration
-    public int OctaveCount { get; set; } = 4;
+    public int OctaveCount { get; set; } = 1;
     public float Persistence { get; set; } = 0.5f; // Controls roughness between octaves
 
     // Biome configuration
     public float BiomeTransitionSize { get; set; } = 0.2f;
 
     // World height control
-    public int BaseHeight { get; set; } = 500; // Base height for surface
-    public int HeightVariation { get; set; } = 200; // How much height can vary
+    public int BaseHeight { get; set; } = 200; // Base height for surface
+    public int HeightVariation { get; set; } = 300; // How much height can vary
 }
 
 class FallingSandWorldGenerator
@@ -120,11 +121,7 @@ class FallingSandWorldGenerator
         if (applicableBiomes.Count == 0)
         {
             // Default to empty if no biome applies
-            return new FallingSandPixelData
-            {
-                Material = Material.Empty,
-                Color = new Color(0, 0, 0),
-            };
+            return new FallingSandPixelData { Material = Material.Empty, Color = Color.Black };
         }
 
         // If we have multiple applicable biomes, blend them based on weights

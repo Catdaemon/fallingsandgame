@@ -13,7 +13,8 @@
             "args": [],
             "cwd": "${workspaceFolder}",
             "console": "internalConsole",
-            "stopAtEntry": false
+            "stopAtEntry": false,
+            "justMyCode": true
         },
         {
             "name": ".NET Core Launch (Release)",

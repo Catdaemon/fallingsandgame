@@ -3,15 +3,9 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using FallingSand;
+using Microsoft.Xna.Framework;
 
 namespace FallingSandWorld;
-
-struct Color(int r, int g, int b)
-{
-    public int R = r;
-    public int G = g;
-    public int B = b;
-}
 
 public enum Material
 {
@@ -88,6 +82,7 @@ struct FallingSandPixelData
 
 class FallingSandPixel
 {
+    #region Constants
     private static readonly Material[] STATIC_MATERIALS =
     {
         Material.Stone,
@@ -126,22 +121,25 @@ class FallingSandPixel
     private readonly FallingSandWorldChunk ParentChunk;
 
     private static readonly (int, int)[] AdjacentOffsets = [(-1, 0), (1, 0), (0, -1), (0, 1)];
+    public const float GRAVITY = 0.5f;
+    public const float MAX_SPEED = 16f;
+    public const int SLEEP_AFTER = 10;
+    #endregion
 
+    #region Properties
     public FallingSandPixelData Data;
     public long LastUpdatedFrameId = -1;
     public bool IsAwake = true;
-    public int SleepCounter = 0;
+    public byte SleepCounter = 0;
     public bool Static = false;
     public bool IsLiquid = false;
     public bool IsFire = false;
     public byte Density = 0;
     public byte Flammability = 0;
     public bool IsGas;
-    public int Lifetime = 0;
+    public uint Lifetime = 0;
     public float Velocity = 0f;
-    public const float GRAVITY = 0.5f;
-    public const float MAX_SPEED = 16f;
-    public const int SLEEP_AFTER = 10;
+    #endregion
 
     static FallingSandPixel()
     {
@@ -160,13 +158,16 @@ class FallingSandPixel
         }
     }
 
+    #region Constructors
     public FallingSandPixel(FallingSandWorldChunk parentChunk, Material material, Color color)
     {
         ParentChunk = parentChunk;
         Data = new() { Material = material, Color = color };
         ComputeProperties();
     }
+    #endregion
 
+    #region Methods
     public void Update(FallingSandWorldChunk chunk, LocalPosition position)
     {
         if (LastUpdatedFrameId == chunk.parentWorld.CurrentFrameId)
@@ -326,31 +327,33 @@ class FallingSandPixel
         }
     }
 
-    private bool MoveVertical(FallingSandWorldChunk chunk, LocalPosition position)
+    private (bool swapPlaces, WorldPosition? newPosition) TryMoveTo(
+        FallingSandWorldChunk chunk,
+        WorldPosition targetPosition
+    )
     {
-        // Movement attempts
-        (bool swapPlaces, WorldPosition? newPosition) TryMoveTo(WorldPosition targetPosition)
+        var targetPixel = chunk.parentWorld.GetPixel(targetPosition);
+        if (targetPixel.Data.Material == Material.Empty)
         {
-            var targetPixel = chunk.parentWorld.GetPixel(targetPosition);
-            if (targetPixel.Data.Material == Material.Empty)
-            {
-                return (false, targetPosition);
-            }
+            return (false, targetPosition);
+        }
 
-            if (targetPixel.Static)
-            {
-                return (false, null);
-            }
-
-            // If our density is higher, swap places
-            if (Density > targetPixel.Density)
-            {
-                return (true, targetPosition);
-            }
-
+        if (targetPixel.Static)
+        {
             return (false, null);
         }
 
+        // If our density is higher, swap places
+        if (Density > targetPixel.Density)
+        {
+            return (true, targetPosition);
+        }
+
+        return (false, null);
+    }
+
+    private bool MoveVertical(FallingSandWorldChunk chunk, LocalPosition position)
+    {
         var previousWorldPosition = chunk.LocalToWorldPosition(position);
         var newWorldPosition = chunk.LocalToWorldPosition(position);
         var direction = IsGas ? -1 : 1;
@@ -363,6 +366,7 @@ class FallingSandPixel
         for (int i = 1; i <= (int)Velocity; i++)
         {
             var (swap, downMoveAttempt) = TryMoveTo(
+                chunk,
                 new WorldPosition(newWorldPosition.X, newWorldPosition.Y + (direction * i))
             );
             if (downMoveAttempt != null)
@@ -389,6 +393,7 @@ class FallingSandPixel
             if (shouldMoveSideways)
             {
                 var (swap, sideMove) = TryMoveTo(
+                    chunk,
                     new WorldPosition(
                         newWorldPosition.X + (Random.Value.Next(2) == 0 ? -1 : 1),
                         newWorldPosition.Y
@@ -407,6 +412,7 @@ class FallingSandPixel
         for (int i = 0; i < 2; i++)
         {
             var (swap, diagonalMove) = TryMoveTo(
+                chunk,
                 new WorldPosition(
                     newWorldPosition.X + initialDirection,
                     newWorldPosition.Y + direction
@@ -426,6 +432,7 @@ class FallingSandPixel
             for (int i = 0; i < 2; i++)
             {
                 var (swap, sideMove) = TryMoveTo(
+                    chunk,
                     new WorldPosition(newWorldPosition.X + initialDirection, newWorldPosition.Y)
                 );
                 if (sideMove != null)
@@ -493,7 +500,7 @@ class FallingSandPixel
 
     public void Empty()
     {
-        Data = new FallingSandPixelData { Material = Material.Empty, Color = new Color(0, 0, 0) };
+        Data = new FallingSandPixelData { Material = Material.Empty, Color = Color.Black };
     }
 
     public void Set(FallingSandPixelData data, float velocity)
@@ -523,4 +530,5 @@ class FallingSandPixel
 
         SleepCounter = 0;
     }
+    #endregion
 }

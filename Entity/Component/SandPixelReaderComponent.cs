@@ -3,7 +3,7 @@ using Microsoft.Xna.Framework;
 
 namespace FallingSand.Entity.Component;
 
-class SandPixelReaderComponent
+record SandPixelReaderComponent
 {
     public Material Material = Material.Empty;
 }

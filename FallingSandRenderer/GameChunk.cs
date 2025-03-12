@@ -3,7 +3,6 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
-using FallingSand;
 using FallingSandWorld;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
@@ -24,12 +23,8 @@ class GameChunk
     private readonly GraphicsDevice GraphicsDevice;
     private readonly Texture2D PixelTexture;
     private readonly FallingSandWorldGenerator WorldGenerator;
-
-    public double lastUpdateTime = 0;
-    public const int UPDATE_INTERVAL = 100;
-
-    private readonly object polysUpdatedLock = new();
     private bool polysUpdated = false;
+    public bool IsCalculatingPhysics = false;
     private readonly ConcurrentBag<Vertices> FallingSandWorldChunkPolys = [];
 
     // thread-safe list
@@ -39,6 +34,7 @@ class GameChunk
 
     public GameChunk(
         GraphicsDevice graphicsDevice,
+        Texture2D pixelTexture,
         SpriteBatch spriteBatch,
         WorldPosition worldOrigin,
         FallingSandWorld.FallingSandWorld world,
@@ -65,8 +61,7 @@ class GameChunk
         );
         ;
 
-        PixelTexture = new Texture2D(graphicsDevice, 1, 1);
-        PixelTexture.SetData([Microsoft.Xna.Framework.Color.White]);
+        PixelTexture = pixelTexture;
 
         BasicEffect = new BasicEffect(GraphicsDevice);
         BasicEffect.VertexColorEnabled = true;
@@ -80,7 +75,8 @@ class GameChunk
         );
     }
 
-    public void Generate()
+    // Usually called from AsyncChunkGenerator
+    public void Generate(bool initialGeneration = false)
     {
         if (HasGeneratedMap)
         {
@@ -115,9 +111,27 @@ class GameChunk
         }
 
         SandChunk = SandWorld.GetOrCreateChunkFromWorldPosition(WorldOrigin);
+        SandChunk.Sleep();
 
-        // Root of performance issue
-        SandChunk.SetPixelBatch(pixelBuffer);
+        if (initialGeneration)
+        {
+            // Do not use the thread-safe method here
+            SandChunk.SetPixelBatch(pixelBuffer, 0);
+            SandChunk.MarkEntireChunkForRedraw();
+            SandChunk.Wake();
+            HasGeneratedMap = true;
+            return;
+        }
+
+        const int setPerUpdate = 500;
+        for (int i = 0; i < Constants.CHUNK_WIDTH * Constants.CHUNK_HEIGHT; i += setPerUpdate)
+        {
+            var pixels = pixelBuffer.Skip(i).Take(setPerUpdate).ToArray();
+            SandChunk.SetPixelBatch(pixels, i);
+            Thread.Sleep(1);
+        }
+
+        SandChunk.MarkEntireChunkForRedraw();
 
         SandChunk.Wake();
 
@@ -137,8 +151,8 @@ class GameChunk
     public void DebugDrawPhysicsPolys()
     {
         (VertexPositionColor[] vertices, int[] indices) CreateFilledPolygon(
-            List<Microsoft.Xna.Framework.Vector2> points,
-            Microsoft.Xna.Framework.Color color
+            List<Vector2> points,
+            Color color
         )
         {
             if (points.Count < 3)
@@ -187,7 +201,7 @@ class GameChunk
                 var scaledGroup = group.Select(v => Convert.MetersToPixels(v)).ToList();
                 var (vertices, indices) = CreateFilledPolygon(
                     scaledGroup,
-                    new Microsoft.Xna.Framework.Color(0, 255, 0, 50) // Added semi-transparency
+                    new Color(0, 255, 0, 50) // Added semi-transparency
                 );
 
                 if (vertices != null && indices != null)
@@ -212,10 +226,23 @@ class GameChunk
         }
     }
 
+    private void DrawEntireChunk()
+    {
+        for (int y = 0; y < Constants.CHUNK_HEIGHT; y++)
+        {
+            for (int x = 0; x < Constants.CHUNK_WIDTH; x++)
+            {
+                var pixelData = SandChunk.pixels[y * Constants.CHUNK_WIDTH + x].Data;
+                // Draw to render target in the correct position
+                SpriteBatch.Draw(PixelTexture, new Rectangle(x, y, 1, 1), pixelData.Color);
+            }
+        }
+    }
+
     // Draw to the render target
     public void Draw()
     {
-        if (!HasGeneratedMap)
+        if (!HasGeneratedMap || SandChunk == null)
         {
             return;
         }
@@ -223,81 +250,75 @@ class GameChunk
         GraphicsDevice.SetRenderTarget(RenderTarget);
 
         var renderedPixels = 0;
-        while (SandChunk.pixelsToDraw.TryTake(out var position) && renderedPixels < 500)
+        var hasPixels = SandChunk.pixelsToDraw.Any();
+        if (hasPixels)
         {
             SpriteBatch.Begin();
+            while (SandChunk.pixelsToDraw.TryTake(out var position) && renderedPixels < 1000)
+            {
+                if (position.X == -1 && position.Y == -1)
+                {
+                    // This indicates that the chunk should be drawn in its entirety
+                    DrawEntireChunk();
+                }
+                else
+                {
+                    // Get pixel data
+                    var pixelData = SandChunk.GetPixel(position).Data;
 
-            // Get pixel data
-            var pixelData = SandChunk.GetPixel(position).Data;
+                    // Draw to render target in the correct position
+                    SpriteBatch.Draw(
+                        PixelTexture,
+                        new Rectangle(position.X, position.Y, 1, 1),
+                        pixelData.Color
+                    );
+                }
 
-            // Draw to render target in the correct position
-            SpriteBatch.Draw(
-                PixelTexture,
-                new Rectangle(position.X, position.Y, 1, 1),
-                new Microsoft.Xna.Framework.Color(
-                    pixelData.Color.R,
-                    pixelData.Color.G,
-                    pixelData.Color.B
-                )
-            );
-
+                renderedPixels++;
+            }
             SpriteBatch.End();
-
-            renderedPixels++;
         }
 
         // Draw outline
-        var outlineColor = new Microsoft.Xna.Framework.Color(255, 0, 0);
-        if (SandChunk.isAwake)
-        {
-            outlineColor = new Microsoft.Xna.Framework.Color(0, 255, 0);
-        }
+        // var outlineColor = new Color(255, 0, 0);
+        // if (SandChunk.isAwake)
+        // {
+        //     outlineColor = new Color(0, 255, 0);
+        // }
 
-        SpriteBatch.Begin();
-        SpriteBatch.Draw(PixelTexture, new Rectangle(0, 0, Constants.CHUNK_WIDTH, 1), outlineColor);
-        SpriteBatch.Draw(
-            PixelTexture,
-            new Rectangle(0, 0, 1, Constants.CHUNK_HEIGHT),
-            outlineColor
-        );
-        SpriteBatch.Draw(
-            PixelTexture,
-            new Rectangle(Constants.CHUNK_WIDTH - 1, 0, 1, Constants.CHUNK_HEIGHT),
-            outlineColor
-        );
-        SpriteBatch.Draw(
-            PixelTexture,
-            new Rectangle(0, Constants.CHUNK_HEIGHT - 1, Constants.CHUNK_WIDTH, 1),
-            outlineColor
-        );
-        SpriteBatch.End();
+        // SpriteBatch.Begin();
+        // SpriteBatch.Draw(PixelTexture, new Rectangle(0, 0, Constants.CHUNK_WIDTH, 1), outlineColor);
+        // SpriteBatch.Draw(
+        //     PixelTexture,
+        //     new Rectangle(0, 0, 1, Constants.CHUNK_HEIGHT),
+        //     outlineColor
+        // );
+        // SpriteBatch.Draw(
+        //     PixelTexture,
+        //     new Rectangle(Constants.CHUNK_WIDTH - 1, 0, 1, Constants.CHUNK_HEIGHT),
+        //     outlineColor
+        // );
+        // SpriteBatch.Draw(
+        //     PixelTexture,
+        //     new Rectangle(0, Constants.CHUNK_HEIGHT - 1, Constants.CHUNK_WIDTH, 1),
+        //     outlineColor
+        // );
+        // SpriteBatch.End();
 
         // DebugDrawPhysicsPolys();
 
         GraphicsDevice.SetRenderTarget(null);
     }
 
-    public void Update(GameTime gameTime)
+    public void CreatePhysicsBodies()
     {
-        if (!HasGeneratedMap)
+        if (!HasGeneratedMap || SandChunk == null)
         {
             return;
         }
 
-        // Look up the chunk
-        if (!SandChunk.isAwake)
-        {
-            return;
-        }
-
-        // Don't hold the lock while updating the physics polygons
-        bool _polysUpdated = false;
-        lock (polysUpdatedLock)
-        {
-            _polysUpdated = polysUpdated;
-        }
         // Only do this work if the physics polygons have been updated
-        if (_polysUpdated)
+        if (polysUpdated)
         {
             foreach (var body in PhysicsBodies)
             {
@@ -316,33 +337,20 @@ class GameChunk
 
                 PhysicsBodies.Add(newBody);
             }
-            lock (polysUpdatedLock)
-            {
-                polysUpdated = false;
-            }
+            polysUpdated = false;
         }
     }
 
     public void UpdatePhysicsPolygons()
     {
         // Generate a physics mesh for the chunk
-        if (!HasGeneratedMap)
+        if (!HasGeneratedMap || polysUpdated)
         {
+            IsCalculatingPhysics = false;
             return;
         }
 
-        lock (polysUpdatedLock)
-        {
-            if (polysUpdated)
-            {
-                // Already updated since last sync
-                return;
-            }
-        }
-
-        var sandChunk = SandWorld.GetOrCreateChunkFromWorldPosition(WorldOrigin);
-
-        var result = PhysicsBodyGenerator.Generate(sandChunk);
+        var result = PhysicsBodyGenerator.Generate(SandChunk);
         if (result != null)
         {
             FallingSandWorldChunkPolys.Clear();
@@ -353,18 +361,16 @@ class GameChunk
                 FallingSandWorldChunkPolys.Add(item);
             }
 
-            lock (polysUpdatedLock)
-            {
-                polysUpdated = true;
-            }
+            polysUpdated = true;
         }
+
+        IsCalculatingPhysics = false;
     }
 
     public void Reset(WorldPosition newPosition)
     {
         // Set the new position
         WorldOrigin = newPosition;
-        lastUpdateTime = 0;
     }
 
     public void Unload()

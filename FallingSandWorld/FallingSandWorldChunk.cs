@@ -6,6 +6,7 @@ using System.Runtime.CompilerServices;
 using Arch.Core;
 using FallingSand;
 using FallingSand.Entity.Component;
+using Microsoft.Xna.Framework;
 
 namespace FallingSandWorld;
 
@@ -14,7 +15,7 @@ class FallingSandWorldChunk
     public ChunkPosition ChunkPos;
 
     public readonly FallingSandWorld parentWorld;
-    public readonly FallingSandPixel[,] pixels;
+    public readonly FallingSandPixel[] pixels;
     public ConcurrentBag<LocalPosition> pixelsToDraw = [];
     public bool isAwake = true;
 
@@ -22,7 +23,7 @@ class FallingSandWorldChunk
     {
         this.parentWorld = parentWorld;
         ChunkPos = chunkPos;
-        pixels = new FallingSandPixel[Constants.CHUNK_WIDTH, Constants.CHUNK_HEIGHT];
+        pixels = new FallingSandPixel[Constants.CHUNK_WIDTH * Constants.CHUNK_HEIGHT];
         InitializePixels();
     }
 
@@ -32,7 +33,11 @@ class FallingSandWorldChunk
         {
             for (int y = 0; y < Constants.CHUNK_HEIGHT; y++)
             {
-                pixels[x, y] = new FallingSandPixel(this, Material.Empty, new Color(0, 0, 0));
+                pixels[y * Constants.CHUNK_WIDTH + x] = new FallingSandPixel(
+                    this,
+                    Material.Empty,
+                    new Color(0, 0, 0)
+                );
             }
         }
     }
@@ -43,13 +48,13 @@ class FallingSandWorldChunk
         isAwake = true;
         // ClearDrawQueue();
         // Clear all pixels
-        for (int x = 0; x < Constants.CHUNK_WIDTH; x++)
-        {
-            for (int y = 0; y < Constants.CHUNK_HEIGHT; y++)
-            {
-                pixels[x, y].Empty();
-            }
-        }
+        // for (int x = 0; x < Constants.CHUNK_WIDTH; x++)
+        // {
+        //     for (int y = 0; y < Constants.CHUNK_HEIGHT; y++)
+        //     {
+        //         pixels[x, y].Empty();
+        //     }
+        // }
     }
 
     public void Wake()
@@ -101,10 +106,10 @@ class FallingSandWorldChunk
                 x += leftFrame ? 1 : -1
             )
             {
-                if (pixels[x, y].IsAwake)
+                var pixel = pixels[y * Constants.CHUNK_WIDTH + x];
+                if (pixel.IsAwake)
                 {
                     // Update each pixel
-                    var pixel = pixels[x, y];
                     var pixelPosition = new LocalPosition(x, y);
                     pixel.Update(this, pixelPosition);
 
@@ -132,12 +137,9 @@ class FallingSandWorldChunk
                     x += !leftFrame ? 1 : -1
                 )
                 {
-                    if (
-                        pixels[x, y].IsAwake
-                        && pixels[x, y].LastUpdatedFrameId < parentWorld.CurrentFrameId
-                    )
+                    var pixel = pixels[y * Constants.CHUNK_WIDTH + x];
+                    if (pixel.IsAwake && pixel.LastUpdatedFrameId < parentWorld.CurrentFrameId)
                     {
-                        var pixel = pixels[x, y];
                         var pixelPosition = new LocalPosition(x, y);
                         pixel.Update(this, pixelPosition);
                     }
@@ -162,10 +164,10 @@ class FallingSandWorldChunk
         )
         {
             // Return an empty pixel if the requested position is outside of the chunk
-            return new FallingSandPixel(this, Material.Empty, new Color(0, 0, 0));
+            return new FallingSandPixel(this, Material.Empty, Color.Black);
         }
 
-        return pixels[position.X, position.Y];
+        return pixels[position.Y * Constants.CHUNK_WIDTH + position.X];
     }
 
     public FallingSandPixel GetPixel(int x, int y)
@@ -190,7 +192,8 @@ class FallingSandWorldChunk
             return;
         }
 
-        pixels[localPosition.X, localPosition.Y].Set(newPixelData, velocity);
+        pixels[localPosition.Y * Constants.CHUNK_WIDTH + localPosition.X]
+            .Set(newPixelData, velocity);
 
         if (!isBulkOperation)
         {
@@ -199,18 +202,18 @@ class FallingSandWorldChunk
         }
     }
 
-    public void SetPixelBatch(FallingSandPixelData[] pixels)
+    public void SetPixelBatch(FallingSandPixelData[] pixelData, int startIndex)
     {
-        Sleep();
-        for (int y = 0; y < Constants.CHUNK_HEIGHT; y++)
+        // use startIndex as pixelData is a subset of the chunk
+        for (int i = 0; i < pixelData.Length; i++)
         {
-            for (int x = 0; x < Constants.CHUNK_WIDTH; x++)
-            {
-                SetPixel(new LocalPosition(x, y), pixels[y * Constants.CHUNK_WIDTH + x], 1, true);
-            }
+            var withOffset = i + startIndex;
+            var x = withOffset % Constants.CHUNK_WIDTH;
+            var y = withOffset / Constants.CHUNK_WIDTH;
+            var pixel = pixels[y * Constants.CHUNK_WIDTH + x];
+            pixel.Data = pixelData[i];
+            pixel.ComputeProperties();
         }
-        Wake();
-        MarkEntireChunkForRedraw();
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -223,7 +226,7 @@ class FallingSandWorldChunk
             // );
             return;
         }
-        pixels[localPosition.X, localPosition.Y].Empty();
+        pixels[localPosition.Y * Constants.CHUNK_WIDTH + localPosition.X].Empty();
         AddPixelToDrawQueue(localPosition);
         Wake();
     }
@@ -235,13 +238,9 @@ class FallingSandWorldChunk
 
     public void MarkEntireChunkForRedraw()
     {
-        for (int y = 0; y < Constants.CHUNK_HEIGHT; y++)
-        {
-            for (int x = 0; x < Constants.CHUNK_WIDTH; x++)
-            {
-                AddPixelToDrawQueue(new LocalPosition(x, y));
-            }
-        }
+        // Instead of adding thousands of individual pixels
+        pixelsToDraw.Clear();
+        pixelsToDraw.Add(new LocalPosition(-1, -1)); // Special marker to indicate "redraw all"
     }
 
     public void ClearDrawQueue()

@@ -4,4 +4,4 @@ using Microsoft.Xna.Framework.Input;
 
 namespace FallingSand.Entity.Component;
 
-class InputReceiverComponent { }
+record InputReceiverComponent { }

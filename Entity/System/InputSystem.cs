@@ -16,6 +16,7 @@ struct InputState
     public bool Shoot;
 
     public Vector2 AimVector;
+    public Vector2 NormalisedMoveVector => new Vector2(Right - Left, Down - Up);
     public Vector2 MousePosition;
 }
 

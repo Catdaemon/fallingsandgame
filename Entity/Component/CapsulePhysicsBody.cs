@@ -1,8 +1,9 @@
 namespace FallingSand.Entity.Component;
 
-record CirclePhysicsBodyComponent
+record CapsulePhysicsBodyComponent
 {
-    public float Radius;
+    public float Width;
+    public float Height;
     public float Density;
     public WorldPosition InitialPosition;
     public bool CreateSensors;

@@ -33,6 +33,7 @@ class SystemManager
         PhysicsSystem = new PhysicsSystem(World, physicsWorld);
         AddSystem(PhysicsSystem);
 
+        AddSystem(new KinematicMovementSystem(World));
         AddSystem(new CameraSystem(World));
         AddSystem(new SandInteractionSystemSystem(World, sandWorld));
         AddSystem(new RenderSystem(World));

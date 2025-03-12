@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using FallingSand;
+using Microsoft.Xna.Framework;
 
 namespace FallingSandWorld.Biomes;
 
@@ -21,11 +22,7 @@ class MountainBiome : BaseBiome
         // Above mountain: air
         if (position.Y < mountainHeight)
         {
-            return new FallingSandPixelData
-            {
-                Material = Material.Empty,
-                Color = new Color(0, 0, 0),
-            };
+            return new FallingSandPixelData { Material = Material.Empty, Color = Color.Black };
         }
 
         // Mountain peak: snow

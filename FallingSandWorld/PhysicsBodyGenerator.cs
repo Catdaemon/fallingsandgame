@@ -26,7 +26,7 @@ static class PhysicsBodyGenerator
         {
             for (int x = 0; x < Constants.CHUNK_WIDTH; x++)
             {
-                var pixel = chunk.pixels[x, y];
+                var pixel = chunk.pixels[y * Constants.CHUNK_WIDTH + x];
                 if (pixel.Data.Material == Material.Empty || pixel.IsGas || pixel.IsLiquid)
                 {
                     data[x, y] = PixelsToPolygons.Empty;

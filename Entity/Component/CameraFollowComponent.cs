@@ -1,3 +1,3 @@
 namespace FallingSand.Entity.Component;
 
-class CameraFollowComponent { }
+record CameraFollowComponent { }

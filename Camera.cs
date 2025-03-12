@@ -152,6 +152,44 @@ static class Camera
             * Matrix.CreateTranslation(new Vector3(screenCenter, 0));
     }
 
+    public static Matrix GetViewMatrix()
+    {
+        // Convert camera position to meters for physics world
+        // Don't negate X this time
+        Vector2 cameraPositionInMeters = new Vector2(
+            PositionF.X / Constants.PIXELS_TO_METERS, // No negation
+            PositionF.Y / Constants.PIXELS_TO_METERS
+        );
+
+        // Look at the camera position from a standard distance away
+        Vector3 cameraPos = new Vector3(cameraPositionInMeters, 10);
+        Vector3 targetPos = new Vector3(cameraPositionInMeters, 0);
+
+        // Create the view matrix with Y axis flipped (keeping Vector3.Down)
+        return Matrix.CreateLookAt(cameraPos, targetPos, Vector3.Down);
+    }
+
+    public static Matrix GetProjectionMatrix()
+    {
+        // Calculate visible area width/height in meters
+        float visibleWidth = Size.X / (Zoom * Constants.PIXELS_TO_METERS);
+        float visibleHeight = Size.Y / (Zoom * Constants.PIXELS_TO_METERS);
+
+        // Create basic orthographic projection
+        Matrix projection = Matrix.CreateOrthographic(
+            visibleWidth,
+            visibleHeight,
+            0.1f, // Near plane
+            1000f // Far plane
+        );
+
+        // Apply horizontal mirroring to the projection matrix
+        Matrix mirrorX = Matrix.CreateScale(-1, 1, 1);
+
+        // Return mirrored projection
+        return mirrorX * projection;
+    }
+
     public static void SetMousePosition(Vector2 newPosition)
     {
         MouseScreenPosition = newPosition;

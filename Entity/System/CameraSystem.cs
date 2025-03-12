@@ -33,14 +33,14 @@ class CameraSystem : ISystem
                 {
                     var positionComponent = entity.Get<PositionComponent>();
                     // Move the camera to follow the entity
-                    var velocityOffset = positionComponent.Velocity;
-                    // Cap the velocity offset at 64, keeping in mind it can be negative
-                    var velocityFactor = new Vector2(
-                        Math.Min(Math.Max(velocityOffset.X, -64), 64),
-                        Math.Min(Math.Max(velocityOffset.Y, -64), 64)
-                    );
+                    // var velocityOffset = positionComponent.Velocity;
+                    // // Cap the velocity offset at 64, keeping in mind it can be negative
+                    // var velocityFactor = new Vector2(
+                    //     Math.Min(Math.Max(velocityOffset.X, -64), 64),
+                    //     Math.Min(Math.Max(velocityOffset.Y, -64), 64)
+                    // );
 
-                    var targetPos = positionComponent.Position + velocityFactor;
+                    var targetPos = positionComponent.Position; //+ velocityFactor;
                     // Use a smooth factor to make the camera movement less jarring
                     // Delta time should be used to make the movement framerate-independent
                     // float smoothFactor = 10f;

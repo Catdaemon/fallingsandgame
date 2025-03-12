@@ -35,36 +35,35 @@ class RenderSystem : ISystem
         var withPhysicsBodyQuery = new QueryDescription().WithAny<PhysicsBodyComponent>();
         World.Query(
             in withPhysicsBodyQuery,
-            (Arch.Core.Entity entity, ref PhysicsBodyComponent physicsBody) =>
-            {
-                var body = physicsBody.PhysicsBodyRef;
-                var position = Convert.MetersToPixels(body.Position);
-                // var radius = Convert.MetersToPixels(body.FixtureList[0].Shape.Radius);
-                AABB aabb;
-                body.FixtureList[0].GetAABB(out aabb, 0);
+            (Arch.Core.Entity entity, ref PhysicsBodyComponent physicsBody) => {
+                // var body = physicsBody.PhysicsBody;
+                // var position = Convert.MetersToPixels(body.Position);
+                // // var radius = Convert.MetersToPixels(body.FixtureList[0].Shape.Radius);
+                // AABB aabb;
+                // body.FixtureList[0].GetAABB(out aabb, 0);
 
-                var isColliding = body.ContactList != null;
+                // var isColliding = body.ContactList != null;
 
-                // Calculate the transform matrix for the physics object
-                // Use the camera transform and the physics object's rotation
-                var transformWithRotation =
-                    Matrix.CreateTranslation(-position.X, -position.Y, 0)
-                    * Matrix.CreateRotationZ(body.Rotation)
-                    * Matrix.CreateTranslation(position.X, position.Y, 0)
-                    * Camera.GetTransformMatrix();
+                // // Calculate the transform matrix for the physics object
+                // // Use the camera transform and the physics object's rotation
+                // var transformWithRotation =
+                //     Matrix.CreateTranslation(-position.X, -position.Y, 0)
+                //     * Matrix.CreateRotationZ(body.Rotation)
+                //     * Matrix.CreateTranslation(position.X, position.Y, 0)
+                //     * Camera.GetTransformMatrix();
 
-                spriteBatch.Begin(transformMatrix: transformWithRotation);
-                spriteBatch.Draw(
-                    pixelTexture,
-                    new Rectangle(
-                        (int)position.X - (int)Convert.MetersToPixels(aabb.Width / 2),
-                        (int)position.Y - (int)Convert.MetersToPixels(aabb.Height / 2),
-                        (int)Convert.MetersToPixels(aabb.Width),
-                        (int)Convert.MetersToPixels(aabb.Height)
-                    ),
-                    isColliding ? Color.Red : Color.Green
-                );
-                spriteBatch.End();
+                // spriteBatch.Begin(transformMatrix: transformWithRotation);
+                // spriteBatch.Draw(
+                //     pixelTexture,
+                //     new Rectangle(
+                //         (int)position.X - (int)Convert.MetersToPixels(aabb.Width / 2),
+                //         (int)position.Y - (int)Convert.MetersToPixels(aabb.Height / 2),
+                //         (int)Convert.MetersToPixels(aabb.Width),
+                //         (int)Convert.MetersToPixels(aabb.Height)
+                //     ),
+                //     isColliding ? Color.Red : Color.Green
+                // );
+                // spriteBatch.End();
             }
         );
     }

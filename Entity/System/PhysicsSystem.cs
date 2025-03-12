@@ -1,9 +1,9 @@
 using System;
+using System.Runtime.CompilerServices;
 using Arch.Core;
 using Arch.Core.Extensions;
 using FallingSand.Entity.Component;
 using Microsoft.Xna.Framework;
-using nkast.Aether.Physics2D.Common;
 using nkast.Aether.Physics2D.Dynamics;
 
 namespace FallingSand.Entity.System;
@@ -20,42 +20,143 @@ class PhysicsSystem : ISystem
     {
         ECSWorld = ecsWorld;
         PhysicsWorld = physicsWorld;
-        // PhysicsWorld.Gravity = new Vector2(0, 9.8f);
-        PhysicsWorld.Gravity = new Vector2(0, 0);
+        PhysicsWorld.Gravity = new Vector2(0, 9.8f);
+
+        // Ensure that physics bodies are removed when their entities are removed
+        ECSWorld.SubscribeComponentRemoved<PhysicsBodyComponent>(OnComponentRemoved);
     }
 
-    private void CreatePhysicsBodies()
+    private void OnComponentRemoved(
+        in Arch.Core.Entity entity,
+        ref PhysicsBodyComponent physicsBody
+    )
     {
-        // Find entities with a physics component but no created physics body
-        var circleQuery = new QueryDescription()
-            .WithAll<CirclePhysicsBodyComponent>()
-            .WithNone<PhysicsBodyComponent>();
-        var rectangleQuery = new QueryDescription()
-            .WithAll<RectanglePhysicsBodyComponent>()
-            .WithNone<PhysicsBodyComponent>();
+        PhysicsWorld.Remove(physicsBody.PhysicsBody);
+    }
 
-        ECSWorld.Query(
-            in circleQuery,
-            (Arch.Core.Entity entity, ref CirclePhysicsBodyComponent circle) =>
+    private struct CreatePhysicsBody : IForEach
+    {
+        public nkast.Aether.Physics2D.Dynamics.World PhysicsWorld;
+
+        public static void CreateCollisionSensor(
+            Body body,
+            float width,
+            float height,
+            Vector2 offset,
+            Action onCollision,
+            Action onSeparation
+        )
+        {
+            var sensor = body.CreateRectangle(width, height, 0, offset);
+            sensor.IsSensor = true;
+            sensor.OnCollision += (fixtureA, fixtureB, contact) =>
             {
-                // Create a physics body for the entity
-                var bodyRef = PhysicsWorld.CreateCircle(
+                onCollision();
+                return true;
+            };
+            sensor.OnSeparation += (fixtureA, fixtureB, contact) =>
+            {
+                onSeparation();
+            };
+        }
+
+        public static void CreateDirectionalCollisionSensors(Body body, Arch.Core.Entity entity)
+        {
+            var bodyWidth = Util.GetPhysicsBodyWidth(body);
+            var bodyHeight = Util.GetPhysicsBodyHeight(body);
+
+            var sensorDistance = 0.05f;
+            var sensorScale = 0.5f;
+
+            // Create sensors for each side of the body
+            CreateCollisionSensor(
+                body,
+                bodyWidth * sensorScale,
+                sensorDistance,
+                new Vector2(0, -bodyHeight * 0.5f - sensorDistance),
+                // TODO: does this crash if the ent is removed?
+                () => entity.Get<PhysicsBodyComponent>().TopCollisionCount++,
+                () => entity.Get<PhysicsBodyComponent>().TopCollisionCount--
+            );
+            CreateCollisionSensor(
+                body,
+                sensorDistance,
+                bodyHeight * sensorScale,
+                new Vector2(-bodyWidth * 0.5f - sensorDistance, 0),
+                () => entity.Get<PhysicsBodyComponent>().LeftCollisionCount++,
+                () => entity.Get<PhysicsBodyComponent>().LeftCollisionCount--
+            );
+            CreateCollisionSensor(
+                body,
+                sensorDistance,
+                bodyHeight * sensorScale,
+                new Vector2(bodyWidth * 0.5f + sensorDistance, 0),
+                () => entity.Get<PhysicsBodyComponent>().RightCollisionCount++,
+                () => entity.Get<PhysicsBodyComponent>().RightCollisionCount--
+            );
+
+            // The bottom sensor is a bit different, it needs to calculate the ground normal
+            var bottomSensor = body.CreateRectangle(
+                bodyWidth * sensorScale,
+                sensorDistance,
+                0,
+                new Vector2(0, bodyHeight * 0.5f + sensorDistance)
+            );
+            bottomSensor.IsSensor = true;
+            bottomSensor.OnCollision += (fixtureA, fixtureB, contact) =>
+            {
+                var component = entity.Get<PhysicsBodyComponent>();
+                component.BottomCollisionCount++;
+
+                // Get the normal from the contact
+                Vector2 normal = contact.Manifold.LocalNormal;
+
+                // Convert if necessary based on which fixture belongs to our entity
+                if (contact.FixtureB.Body == body)
+                {
+                    normal = -normal; // Flip the normal if our body is fixture B
+                }
+
+                // Only use this normal if it's pointing somewhat upward
+                if (normal.Y < 0)
+                {
+                    // Normalize the vector to ensure it's a unit vector
+                    normal.Normalize();
+                    component.GroundNormal = normal;
+                }
+
+                return true;
+            };
+            bottomSensor.OnSeparation += (fixtureA, fixtureB, contact) =>
+            {
+                entity.Get<PhysicsBodyComponent>().BottomCollisionCount--;
+            };
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public readonly void Update(Arch.Core.Entity entity)
+        {
+            Body createdBody = null;
+            if (entity.Has<CirclePhysicsBodyComponent>())
+            {
+                var circle = entity.Get<CirclePhysicsBodyComponent>();
+                createdBody = PhysicsWorld.CreateCircle(
                     Convert.PixelsToMeters(circle.Radius),
                     circle.Density,
                     Convert.PixelsToMeters(
                         new Vector2(circle.InitialPosition.X, circle.InitialPosition.Y)
                     ),
-                    BodyType.Dynamic
+                    bodyType: BodyType.Dynamic
                 );
-                entity.Add(new PhysicsBodyComponent(bodyRef));
+                if (circle.CreateSensors)
+                {
+                    CreateDirectionalCollisionSensors(createdBody, entity);
+                }
             }
-        );
-
-        ECSWorld.Query(
-            in rectangleQuery,
-            (Arch.Core.Entity entity, ref RectanglePhysicsBodyComponent rect) =>
+            if (entity.Has<RectanglePhysicsBodyComponent>())
             {
-                var bodyRef = PhysicsWorld.CreateRectangle(
+                var rect = entity.Get<RectanglePhysicsBodyComponent>();
+                createdBody = PhysicsWorld.CreateRectangle(
                     Convert.PixelsToMeters(rect.Width),
                     Convert.PixelsToMeters(rect.Height),
                     rect.Density,
@@ -63,11 +164,50 @@ class PhysicsSystem : ISystem
                         new Vector2(rect.InitialPosition.X, rect.InitialPosition.Y)
                     ),
                     rotation: 0,
-                    BodyType.Dynamic
+                    bodyType: BodyType.Dynamic
                 );
-                entity.Add(new PhysicsBodyComponent(bodyRef));
+                if (rect.CreateSensors)
+                {
+                    CreateDirectionalCollisionSensors(createdBody, entity);
+                }
             }
-        );
+            if (entity.Has<CapsulePhysicsBodyComponent>())
+            {
+                var capsule = entity.Get<CapsulePhysicsBodyComponent>();
+                createdBody = PhysicsWorld.CreateCapsule(
+                    Convert.PixelsToMeters(capsule.Height),
+                    Convert.PixelsToMeters(capsule.Width),
+                    capsule.Density,
+                    Convert.PixelsToMeters(
+                        new Vector2(capsule.InitialPosition.X, capsule.InitialPosition.Y)
+                    ),
+                    rotation: 0,
+                    bodyType: BodyType.Dynamic
+                );
+                if (capsule.CreateSensors)
+                {
+                    CreateDirectionalCollisionSensors(createdBody, entity);
+                }
+            }
+            if (createdBody != null)
+            {
+                entity.Add(new PhysicsBodyComponent { PhysicsBody = createdBody });
+            }
+        }
+    }
+
+    private static readonly QueryDescription createPhysicsBodyQuery = new QueryDescription()
+        .WithAny<
+            CirclePhysicsBodyComponent,
+            RectanglePhysicsBodyComponent,
+            CapsulePhysicsBodyComponent
+        >()
+        .WithNone<PhysicsBodyComponent>();
+
+    private void CreatePhysicsBodies()
+    {
+        var queryObject = new CreatePhysicsBody { PhysicsWorld = PhysicsWorld };
+        ECSWorld.InlineQuery<CreatePhysicsBody>(in createPhysicsBodyQuery, ref queryObject);
     }
 
     public void Update(GameTime gameTime)
@@ -80,28 +220,26 @@ class PhysicsSystem : ISystem
             in query,
             (Arch.Core.Entity entity, ref PhysicsBodyComponent physicsBody) =>
             {
-                if (entity.Has<InputStateComponent>())
-                {
-                    // Update the physics object based on the input state
-                    var inputState = entity.Get<InputStateComponent>().Value;
-                    var inputVector =
-                        new Vector2(
-                            inputState.Left - inputState.Right,
-                            inputState.Up - inputState.Down
-                        ) * -10f;
-                    physicsBody.PhysicsBodyRef.ApplyLinearImpulse(
-                        Convert.PixelsToMeters(inputVector)
-                    );
-                }
+                // if (entity.Has<InputStateComponent>())
+                // {
+                //     // Update the physics object based on the input state
+                //     var inputState = entity.Get<InputStateComponent>().Value;
+                //     var inputVector =
+                //         new Vector2(
+                //             inputState.Left - inputState.Right,
+                //             inputState.Up - inputState.Down
+                //         ) * -1f;
+                //     physicsBody.PhysicsBody.ApplyLinearImpulse(Convert.PixelsToMeters(inputVector));
+                // }
                 if (entity.Has<PositionComponent>())
                 {
                     var positionComponent = entity.Get<PositionComponent>();
                     // Update the position based on the physics object's position
                     positionComponent.Position = Convert.MetersToPixels(
-                        physicsBody.PhysicsBodyRef.WorldCenter
+                        physicsBody.PhysicsBody.WorldCenter
                     );
                     positionComponent.Velocity = Convert.MetersToPixels(
-                        physicsBody.PhysicsBodyRef.LinearVelocity
+                        physicsBody.PhysicsBody.LinearVelocity
                     );
                 }
                 if (entity.Has<BoundingBoxComponent>())

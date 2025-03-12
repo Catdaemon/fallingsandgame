@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using FallingSandWorld;
 using Microsoft.Xna.Framework.Graphics;
@@ -7,9 +8,9 @@ namespace FallingSand.FallingSandRenderer;
 
 class GameChunkPool
 {
-    private readonly object lockObject = new();
-    private readonly Stack<GameChunk> pool = new();
+    private readonly ConcurrentBag<GameChunk> pool = new();
     private readonly GraphicsDevice graphicsDevice;
+    private readonly Texture2D pixelTexture;
     private readonly SpriteBatch spriteBatch;
     private readonly FallingSandWorld.FallingSandWorld sandWorld;
     private readonly FallingSandWorldGenerator generator;
@@ -17,6 +18,7 @@ class GameChunkPool
 
     public GameChunkPool(
         GraphicsDevice graphicsDevice,
+        Texture2D pixelTexture,
         SpriteBatch spriteBatch,
         FallingSandWorld.FallingSandWorld sandWorld,
         FallingSandWorldGenerator generator,
@@ -28,16 +30,14 @@ class GameChunkPool
         this.sandWorld = sandWorld;
         this.generator = generator;
         this.physicsWorld = physicsWorld;
+        this.pixelTexture = pixelTexture;
     }
 
     public void Initialize(int initialSize)
     {
-        lock (lockObject)
+        for (int i = 0; i < initialSize; i++)
         {
-            for (int i = 0; i < initialSize; i++)
-            {
-                pool.Push(CreateChunk(new WorldPosition(0, 0)));
-            }
+            pool.Add(CreateChunk(new WorldPosition(0, 0)));
         }
     }
 
@@ -45,6 +45,7 @@ class GameChunkPool
     {
         return new GameChunk(
             graphicsDevice,
+            pixelTexture,
             spriteBatch,
             position,
             sandWorld,
@@ -55,26 +56,19 @@ class GameChunkPool
 
     public GameChunk Get(WorldPosition position)
     {
-        lock (lockObject)
+        if (pool.TryTake(out var chunk))
         {
-            if (pool.Count > 0)
-            {
-                var chunk = pool.Pop();
-                chunk.Reset(position);
-                return chunk;
-            }
-
-            Console.WriteLine("GameChunk pool exhausted, creating new GameChunk");
-
-            return CreateChunk(position);
+            chunk.Reset(position);
+            return chunk;
         }
+
+        Console.WriteLine("GameChunk pool exhausted, creating new GameChunk");
+
+        return CreateChunk(position);
     }
 
     public void Return(GameChunk chunk)
     {
-        lock (lockObject)
-        {
-            pool.Push(chunk);
-        }
+        pool.Add(chunk);
     }
 }
