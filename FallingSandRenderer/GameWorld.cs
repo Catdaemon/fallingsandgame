@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using Arch.Core;
 using FallingSand.Entity.System;
+using FallingSand.WorldGenerator;
 using FallingSandWorld;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
@@ -29,6 +30,8 @@ class GameWorld
     private readonly List<(ChunkPosition, GameChunk)> visibleChunks = new(
         Constants.INITIAL_CHUNK_POOL_SIZE
     );
+
+    private GeneratedWorldInstance worldTiles;
 
     public GameWorld()
     {
@@ -57,16 +60,18 @@ class GameWorld
         FallingSandWorld.FallingSandWorld sandWorld
     )
     {
-        var generator = new FallingSandWorldGenerator(
-            seed,
-            new WorldGeneratorConfig()
-            {
-                TerrainScale = 0.0005f,
-                BiomeScale = 0.1f,
-                OctaveCount = 2,
-                BiomeTransitionSize = 0.2f,
-            }
-        );
+        var generator = new WorldGenerationManager();
+        generator.LoadAssets();
+        worldTiles = generator.GenerateWorld(seed, "Caves", 1000, 1000, []);
+
+        if (!worldTiles.IsValid())
+        {
+            var violations = worldTiles.ValidateConstraints();
+            Console.WriteLine(
+                $"Found {violations.Count} constraint violations in the generated world."
+            );
+        }
+
         this.sandWorld = sandWorld;
         this.physicsWorld = physicsWorld;
 
@@ -80,7 +85,7 @@ class GameWorld
             pixelTexture,
             spriteBatch,
             sandWorld,
-            generator,
+            worldTiles,
             physicsWorld
         );
         gameChunkPool.Initialize(Constants.INITIAL_CHUNK_POOL_SIZE);
@@ -252,6 +257,12 @@ class GameWorld
         {
             for (int chunkY = startChunkY; chunkY < endChunkY; chunkY++)
             {
+                // Skip negative chunks
+                if (chunkX < 0 || chunkY < 0)
+                {
+                    continue;
+                }
+
                 var chunkPosition = new ChunkPosition(chunkX, chunkY);
 
                 if (!createMissing && !gameChunks.ContainsKey(chunkPosition))

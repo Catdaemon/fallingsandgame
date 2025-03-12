@@ -20,7 +20,8 @@ class PhysicsSystem : ISystem
     {
         ECSWorld = ecsWorld;
         PhysicsWorld = physicsWorld;
-        PhysicsWorld.Gravity = new Vector2(0, 9.8f);
+        // PhysicsWorld.Gravity = new Vector2(0, 9.8f);
+        PhysicsWorld.Gravity = new Vector2(0, 0f);
 
         // Ensure that physics bodies are removed when their entities are removed
         ECSWorld.SubscribeComponentRemoved<PhysicsBodyComponent>(OnComponentRemoved);

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using FallingSand.WorldGenerator;
 using FallingSandWorld;
 using Microsoft.Xna.Framework.Graphics;
 
@@ -13,7 +14,7 @@ class GameChunkPool
     private readonly Texture2D pixelTexture;
     private readonly SpriteBatch spriteBatch;
     private readonly FallingSandWorld.FallingSandWorld sandWorld;
-    private readonly FallingSandWorldGenerator generator;
+    private readonly GeneratedWorldInstance worldTiles;
     private readonly nkast.Aether.Physics2D.Dynamics.World physicsWorld;
 
     public GameChunkPool(
@@ -21,14 +22,14 @@ class GameChunkPool
         Texture2D pixelTexture,
         SpriteBatch spriteBatch,
         FallingSandWorld.FallingSandWorld sandWorld,
-        FallingSandWorldGenerator generator,
+        GeneratedWorldInstance worldTiles,
         nkast.Aether.Physics2D.Dynamics.World physicsWorld
     )
     {
         this.graphicsDevice = graphicsDevice;
         this.spriteBatch = spriteBatch;
         this.sandWorld = sandWorld;
-        this.generator = generator;
+        this.worldTiles = worldTiles;
         this.physicsWorld = physicsWorld;
         this.pixelTexture = pixelTexture;
     }
@@ -49,7 +50,7 @@ class GameChunkPool
             spriteBatch,
             position,
             sandWorld,
-            generator,
+            worldTiles,
             physicsWorld
         );
     }

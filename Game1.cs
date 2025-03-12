@@ -72,7 +72,7 @@ public class Game1 : Game
     {
         Camera.SetPosition(new WorldPosition(64, 64));
         Camera.SetSize(new WorldPosition(worldSizeX, worldSizeY));
-        Camera.SetZoom(2.0f);
+        Camera.SetZoom(1.0f);
 
         sandWorld = new FallingSandWorld.FallingSandWorld(new WorldPosition(1000, 1000));
 

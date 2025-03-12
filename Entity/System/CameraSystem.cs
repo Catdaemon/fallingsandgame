@@ -11,6 +11,7 @@ namespace FallingSand.Entity.System;
 class CameraSystem : ISystem
 {
     private readonly World World;
+    private Vector2 offset;
 
     public CameraSystem(World world)
     {
@@ -23,6 +24,24 @@ class CameraSystem : ISystem
     public void Update(GameTime gameTime)
     {
         var delta = (float)gameTime.ElapsedGameTime.TotalSeconds;
+
+        if (Keyboard.GetState().IsKeyDown(Keys.Left))
+        {
+            offset.X -= 200 * delta;
+        }
+        if (Keyboard.GetState().IsKeyDown(Keys.Right))
+        {
+            offset.X += 200 * delta;
+        }
+        if (Keyboard.GetState().IsKeyDown(Keys.Up))
+        {
+            offset.Y -= 200 * delta;
+        }
+        if (Keyboard.GetState().IsKeyDown(Keys.Down))
+        {
+            offset.Y += 200 * delta;
+        }
+
         // Find entities with a Camera Follow component
         var withFollowCameraQuery = new QueryDescription().WithAll<CameraFollowComponent>();
         World.Query(
@@ -40,7 +59,7 @@ class CameraSystem : ISystem
                     //     Math.Min(Math.Max(velocityOffset.Y, -64), 64)
                     // );
 
-                    var targetPos = positionComponent.Position; //+ velocityFactor;
+                    var targetPos = positionComponent.Position + offset; //+ velocityFactor;
                     // Use a smooth factor to make the camera movement less jarring
                     // Delta time should be used to make the movement framerate-independent
                     // float smoothFactor = 10f;

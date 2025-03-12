@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
+using FallingSand.WorldGenerator;
 using FallingSandWorld;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
@@ -22,7 +23,7 @@ class GameChunk
     public SpriteBatch SpriteBatch;
     private readonly GraphicsDevice GraphicsDevice;
     private readonly Texture2D PixelTexture;
-    private readonly FallingSandWorldGenerator WorldGenerator;
+    private readonly GeneratedWorldInstance WorldTiles;
     private bool polysUpdated = false;
     public bool IsCalculatingPhysics = false;
     private readonly ConcurrentBag<Vertices> FallingSandWorldChunkPolys = [];
@@ -38,13 +39,13 @@ class GameChunk
         SpriteBatch spriteBatch,
         WorldPosition worldOrigin,
         FallingSandWorld.FallingSandWorld world,
-        FallingSandWorldGenerator generator,
+        GeneratedWorldInstance worldTiles,
         World physicsWorld
     )
     {
         WorldOrigin = worldOrigin;
         SandWorld = world;
-        WorldGenerator = generator;
+        WorldTiles = worldTiles;
         GraphicsDevice = graphicsDevice;
         SpriteBatch = spriteBatch;
         PhysicsWorld = physicsWorld;
@@ -83,12 +84,8 @@ class GameChunk
             return;
         }
 
-        var batch = WorldGenerator.GenerateBatch(
-            new WorldPosition(WorldOrigin.X, WorldOrigin.Y),
-            new WorldPosition(
-                WorldOrigin.X + Constants.CHUNK_WIDTH,
-                WorldOrigin.Y + Constants.CHUNK_HEIGHT
-            )
+        var worldTile = WorldTiles.GetTileAt(
+            FallingSandWorld.FallingSandWorld.WorldToChunkPosition(WorldOrigin)
         );
 
         // Create a local buffer that belongs only to this thread
@@ -100,12 +97,12 @@ class GameChunk
         {
             for (int x = 0; x < Constants.CHUNK_WIDTH; x++)
             {
-                var pixel = batch[y * Constants.CHUNK_WIDTH + x];
+                var pixel = worldTile.TileDefinition.PixelData[y * Constants.CHUNK_WIDTH + x];
 
                 pixelBuffer[y * Constants.CHUNK_WIDTH + x] = new FallingSandPixelData
                 {
-                    Material = pixel.Material,
-                    Color = pixel.Color,
+                    Material = pixel,
+                    Color = pixel == Material.Empty ? Color.White : Color.Black,
                 };
             }
         }
@@ -146,84 +143,6 @@ class GameChunk
     public WorldPosition LocalToWorldPosition(LocalPosition localPosition)
     {
         return new WorldPosition(localPosition.X + WorldOrigin.X, localPosition.Y + WorldOrigin.Y);
-    }
-
-    public void DebugDrawPhysicsPolys()
-    {
-        (VertexPositionColor[] vertices, int[] indices) CreateFilledPolygon(
-            List<Vector2> points,
-            Color color
-        )
-        {
-            if (points.Count < 3)
-                return (null, null);
-
-            // Create vertices (one for each point plus one for the center)
-            var _vertices = new VertexPositionColor[points.Count + 1];
-
-            // Calculate center point by averaging all vertices
-            Vector2 center = Vector2.Zero;
-            foreach (Vector2 point in points)
-            {
-                center += point;
-            }
-            center /= points.Count;
-
-            // Center vertex
-            _vertices[0] = new VertexPositionColor(new Vector3(center.X, center.Y, 0), color);
-
-            // Outer vertices
-            for (int i = 0; i < points.Count; i++)
-            {
-                _vertices[i + 1] = new VertexPositionColor(
-                    new Vector3(points[i].X, points[i].Y, 0),
-                    color
-                );
-            }
-
-            // Create indices for a triangle fan (converted to triangle list)
-            var _indices = new int[points.Count * 3];
-            for (int i = 0; i < points.Count; i++)
-            {
-                _indices[i * 3] = 0; // Center vertex
-                _indices[i * 3 + 1] = 1 + i;
-                _indices[i * 3 + 2] = 1 + ((i + 1) % points.Count);
-            }
-
-            return (_vertices, _indices);
-        }
-
-        if (FallingSandWorldChunkPolys != null)
-        {
-            foreach (var group in FallingSandWorldChunkPolys)
-            {
-                // Scale the vertices to the physics world
-                var scaledGroup = group.Select(v => Convert.MetersToPixels(v)).ToList();
-                var (vertices, indices) = CreateFilledPolygon(
-                    scaledGroup,
-                    new Color(0, 255, 0, 50) // Added semi-transparency
-                );
-
-                if (vertices != null && indices != null)
-                {
-                    foreach (EffectPass pass in BasicEffect.CurrentTechnique.Passes)
-                    {
-                        pass.Apply();
-
-                        // Draw the polygon
-                        GraphicsDevice.DrawUserIndexedPrimitives(
-                            PrimitiveType.TriangleList,
-                            vertices,
-                            0, // vertex buffer offset
-                            vertices.Length, // number of vertices
-                            indices,
-                            0, // index buffer offset
-                            indices.Length / 3 // number of primitives (triangles)
-                        );
-                    }
-                }
-            }
-        }
     }
 
     private void DrawEntireChunk()
@@ -280,32 +199,30 @@ class GameChunk
         }
 
         // Draw outline
-        // var outlineColor = new Color(255, 0, 0);
-        // if (SandChunk.isAwake)
-        // {
-        //     outlineColor = new Color(0, 255, 0);
-        // }
+        var outlineColor = new Color(255, 0, 0);
+        if (SandChunk.isAwake)
+        {
+            outlineColor = new Color(0, 255, 0);
+        }
 
-        // SpriteBatch.Begin();
-        // SpriteBatch.Draw(PixelTexture, new Rectangle(0, 0, Constants.CHUNK_WIDTH, 1), outlineColor);
-        // SpriteBatch.Draw(
-        //     PixelTexture,
-        //     new Rectangle(0, 0, 1, Constants.CHUNK_HEIGHT),
-        //     outlineColor
-        // );
-        // SpriteBatch.Draw(
-        //     PixelTexture,
-        //     new Rectangle(Constants.CHUNK_WIDTH - 1, 0, 1, Constants.CHUNK_HEIGHT),
-        //     outlineColor
-        // );
-        // SpriteBatch.Draw(
-        //     PixelTexture,
-        //     new Rectangle(0, Constants.CHUNK_HEIGHT - 1, Constants.CHUNK_WIDTH, 1),
-        //     outlineColor
-        // );
-        // SpriteBatch.End();
-
-        // DebugDrawPhysicsPolys();
+        SpriteBatch.Begin();
+        SpriteBatch.Draw(PixelTexture, new Rectangle(0, 0, Constants.CHUNK_WIDTH, 1), outlineColor);
+        SpriteBatch.Draw(
+            PixelTexture,
+            new Rectangle(0, 0, 1, Constants.CHUNK_HEIGHT),
+            outlineColor
+        );
+        SpriteBatch.Draw(
+            PixelTexture,
+            new Rectangle(Constants.CHUNK_WIDTH - 1, 0, 1, Constants.CHUNK_HEIGHT),
+            outlineColor
+        );
+        SpriteBatch.Draw(
+            PixelTexture,
+            new Rectangle(0, Constants.CHUNK_HEIGHT - 1, Constants.CHUNK_WIDTH, 1),
+            outlineColor
+        );
+        SpriteBatch.End();
 
         GraphicsDevice.SetRenderTarget(null);
     }
