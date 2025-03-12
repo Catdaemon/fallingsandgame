@@ -199,30 +199,30 @@ class GameChunk
         }
 
         // Draw outline
-        var outlineColor = new Color(255, 0, 0);
-        if (SandChunk.isAwake)
-        {
-            outlineColor = new Color(0, 255, 0);
-        }
+        // var outlineColor = new Color(255, 0, 0);
+        // if (SandChunk.isAwake)
+        // {
+        //     outlineColor = new Color(0, 255, 0);
+        // }
 
-        SpriteBatch.Begin();
-        SpriteBatch.Draw(PixelTexture, new Rectangle(0, 0, Constants.CHUNK_WIDTH, 1), outlineColor);
-        SpriteBatch.Draw(
-            PixelTexture,
-            new Rectangle(0, 0, 1, Constants.CHUNK_HEIGHT),
-            outlineColor
-        );
-        SpriteBatch.Draw(
-            PixelTexture,
-            new Rectangle(Constants.CHUNK_WIDTH - 1, 0, 1, Constants.CHUNK_HEIGHT),
-            outlineColor
-        );
-        SpriteBatch.Draw(
-            PixelTexture,
-            new Rectangle(0, Constants.CHUNK_HEIGHT - 1, Constants.CHUNK_WIDTH, 1),
-            outlineColor
-        );
-        SpriteBatch.End();
+        // SpriteBatch.Begin();
+        // SpriteBatch.Draw(PixelTexture, new Rectangle(0, 0, Constants.CHUNK_WIDTH, 1), outlineColor);
+        // SpriteBatch.Draw(
+        //     PixelTexture,
+        //     new Rectangle(0, 0, 1, Constants.CHUNK_HEIGHT),
+        //     outlineColor
+        // );
+        // SpriteBatch.Draw(
+        //     PixelTexture,
+        //     new Rectangle(Constants.CHUNK_WIDTH - 1, 0, 1, Constants.CHUNK_HEIGHT),
+        //     outlineColor
+        // );
+        // SpriteBatch.Draw(
+        //     PixelTexture,
+        //     new Rectangle(0, Constants.CHUNK_HEIGHT - 1, Constants.CHUNK_WIDTH, 1),
+        //     outlineColor
+        // );
+        // SpriteBatch.End();
 
         GraphicsDevice.SetRenderTarget(null);
     }

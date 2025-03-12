@@ -62,7 +62,7 @@ class GameWorld
     {
         var generator = new WorldGenerationManager();
         generator.LoadAssets();
-        worldTiles = generator.GenerateWorld(seed, "Caves", 1000, 1000, []);
+        worldTiles = generator.GenerateWorld(seed, "Caves", 500, 500, []);
 
         if (!worldTiles.IsValid())
         {

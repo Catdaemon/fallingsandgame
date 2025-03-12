@@ -105,7 +105,7 @@ class WorldGenerationManager
         var completedTileCount = 0;
         var world = new Tile[width, height];
         DateTime startTime = DateTime.Now;
-        TimeSpan timeout = TimeSpan.FromSeconds(30); // Adjust as needed
+        TimeSpan timeout = TimeSpan.FromSeconds(90); // Adjust as needed
 
         // Initialize the grid with randomized entropy
         for (int x = 0; x < width; x++)

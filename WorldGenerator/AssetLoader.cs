@@ -12,8 +12,8 @@ static class AssetLoader
     private const int IMAGE_SIZE = WorldGenerationManager.IMAGE_SIZE;
     private static readonly Dictionary<Color, Material> ColorMaterialMap = new()
     {
-        { Color.White, Material.Empty },
-        { Color.Black, Material.Stone },
+        { Color.Black, Material.Empty },
+        { Color.White, Material.Stone },
     };
 
     private static TileDefinition ProcessRotatedAsset(SKBitmap bitmap, int rotation, bool flipped)
