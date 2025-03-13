@@ -22,8 +22,9 @@ class GameChunk
     public RenderTarget2D RenderTarget;
     public SpriteBatch SpriteBatch;
     private readonly GraphicsDevice GraphicsDevice;
-    private readonly Texture2D PixelTexture;
+    public readonly Texture2D PixelTexture;
     private readonly GeneratedWorldInstance WorldTiles;
+    private readonly MaterialTextureSampler MaterialTextureSampler;
     private bool polysUpdated = false;
     public bool IsCalculatingPhysics = false;
     private readonly ConcurrentBag<Vertices> FallingSandWorldChunkPolys = [];
@@ -40,7 +41,8 @@ class GameChunk
         WorldPosition worldOrigin,
         FallingSandWorld.FallingSandWorld world,
         GeneratedWorldInstance worldTiles,
-        World physicsWorld
+        World physicsWorld,
+        MaterialTextureSampler materialTextureSampler
     )
     {
         WorldOrigin = worldOrigin;
@@ -49,18 +51,23 @@ class GameChunk
         GraphicsDevice = graphicsDevice;
         SpriteBatch = spriteBatch;
         PhysicsWorld = physicsWorld;
+        MaterialTextureSampler = materialTextureSampler;
 
         RenderTarget = new RenderTarget2D(
             graphicsDevice,
             Constants.CHUNK_WIDTH,
             Constants.CHUNK_HEIGHT,
             false,
-            graphicsDevice.PresentationParameters.BackBufferFormat,
+            SurfaceFormat.Color,
             DepthFormat.None,
             0,
             RenderTargetUsage.PreserveContents
         );
         ;
+
+        graphicsDevice.SetRenderTarget(RenderTarget);
+        graphicsDevice.Clear(Color.Transparent);
+        graphicsDevice.SetRenderTarget(null);
 
         PixelTexture = pixelTexture;
 
@@ -102,7 +109,7 @@ class GameChunk
                 pixelBuffer[y * Constants.CHUNK_WIDTH + x] = new FallingSandPixelData
                 {
                     Material = pixel,
-                    Color = pixel == Material.Empty ? Color.White : Color.Black,
+                    Color = MaterialTextureSampler.GetPixel(pixel, x, y)
                 };
             }
         }
@@ -158,6 +165,15 @@ class GameChunk
         }
     }
 
+    public static BlendState overwriteBlend = new BlendState
+    {
+        ColorSourceBlend = Blend.SourceAlpha,
+        ColorDestinationBlend = Blend.SourceColor,
+        ColorBlendFunction = BlendFunction.Add,
+        AlphaSourceBlend = Blend.One,
+        AlphaDestinationBlend = Blend.Zero
+    };
+
     // Draw to the render target
     public void Draw()
     {
@@ -172,7 +188,7 @@ class GameChunk
         var hasPixels = SandChunk.pixelsToDraw.Any();
         if (hasPixels)
         {
-            SpriteBatch.Begin();
+            SpriteBatch.Begin(blendState: overwriteBlend);
             while (SandChunk.pixelsToDraw.TryTake(out var position) && renderedPixels < 1000)
             {
                 if (position.X == -1 && position.Y == -1)

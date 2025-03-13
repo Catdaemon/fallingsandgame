@@ -27,6 +27,7 @@ class GameWorld
 
     private readonly DoEvery createNewChunksTimer;
     private readonly DoEvery updateGameWorldTimer;
+    private readonly MaterialTextureSampler materialTextureSampler = new();
     private readonly List<(ChunkPosition, GameChunk)> visibleChunks = new(
         Constants.INITIAL_CHUNK_POOL_SIZE
     );
@@ -62,6 +63,7 @@ class GameWorld
     {
         var generator = new WorldGenerationManager();
         generator.LoadAssets();
+        materialTextureSampler.Load();
         worldTiles = generator.GenerateWorld(seed, "Caves", 500, 500, []);
 
         if (!worldTiles.IsValid())
@@ -86,7 +88,8 @@ class GameWorld
             spriteBatch,
             sandWorld,
             worldTiles,
-            physicsWorld
+            physicsWorld,
+            materialTextureSampler
         );
         gameChunkPool.Initialize(Constants.INITIAL_CHUNK_POOL_SIZE);
 
@@ -203,18 +206,22 @@ class GameWorld
         }
     }
 
-    public void Draw(GameTime gameTime)
+    public void DrawRenderTargets()
     {
         // Draw to the render targets
         foreach (var (_, chunk) in visibleChunks)
         {
             chunk.Draw();
         }
+    }
 
+    public void Draw(GameTime gameTime)
+    {
         // Draw the render targets to the screen
         spriteBatch.Begin(
             transformMatrix: Camera.GetTransformMatrix(),
-            samplerState: SamplerState.PointWrap
+            samplerState: SamplerState.PointWrap,
+            blendState: BlendState.AlphaBlend
         );
         foreach (var (_, chunk) in visibleChunks)
         {
@@ -229,6 +236,7 @@ class GameWorld
                 Color.White
             );
         }
+
         spriteBatch.End();
     }
 

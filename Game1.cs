@@ -179,7 +179,8 @@ public class Game1 : Game
 
     protected override void Draw(GameTime gameTime)
     {
-        GraphicsDevice.Clear(Microsoft.Xna.Framework.Color.CornflowerBlue);
+        gameWorld.DrawRenderTargets();
+        GraphicsDevice.Clear(Color.CornflowerBlue);
 
         // FrameCounter.DrawFps(_spriteBatch, spriteFont, new Vector2(10, 10), Color.White);
 
@@ -187,7 +188,7 @@ public class Game1 : Game
 
         systemManager.Draw(gameTime);
 
-        physicsDebugView.RenderDebugData(Camera.GetProjectionMatrix(), Camera.GetViewMatrix());
+        // physicsDebugView.RenderDebugData(Camera.GetProjectionMatrix(), Camera.GetViewMatrix());
 
         base.Draw(gameTime);
     }

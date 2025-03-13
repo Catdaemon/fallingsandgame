@@ -41,6 +41,14 @@ class CameraSystem : ISystem
         {
             offset.Y += 200 * delta;
         }
+        if (Keyboard.GetState().IsKeyDown(Keys.OemPlus))
+        {
+            Camera.SetZoom(Camera.GetZoom() +  0.5f * delta );
+        }
+        if (Keyboard.GetState().IsKeyDown(Keys.OemMinus))
+        {
+            Camera.SetZoom(Camera.GetZoom() - 0.1f * delta);
+        }
 
         // Find entities with a Camera Follow component
         var withFollowCameraQuery = new QueryDescription().WithAll<CameraFollowComponent>();

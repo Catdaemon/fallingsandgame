@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using FallingSand;
+using FallingSandWorld.Pixels;
 using Microsoft.Xna.Framework;
 
 namespace FallingSandWorld;
@@ -120,7 +121,7 @@ class FallingSandPixel
     private static readonly ThreadLocal<Random> Random = new(() => new Random());
     private readonly FallingSandWorldChunk ParentChunk;
 
-    private static readonly (int, int)[] AdjacentOffsets = [(-1, 0), (1, 0), (0, -1), (0, 1)];
+    public static readonly (int, int)[] AdjacentOffsets = [(-1, 0), (1, 0), (0, -1), (0, 1)];
     public const float GRAVITY = 0.5f;
     public const float MAX_SPEED = 16f;
     public const int SLEEP_AFTER = 10;
@@ -205,113 +206,11 @@ class FallingSandPixel
             }
         }
 
-        // Special gas behaviour
-        if (IsGas)
-        {
-            Lifetime++;
-
-            if (Lifetime > 1000)
-            {
-                chunk.EmptyPixel(position);
-            }
-        }
-
-        // Special fire behaviour
-        if (IsFire)
-        {
-            moved = true;
-            Lifetime++;
-
-            // After lifetime, randomly decide whether to extinguish
-            if (Lifetime > 100 && Random.Value.Next(100) < 10)
-            {
-                chunk.EmptyPixel(position);
-            }
-
-            // Randomise our colour to make the fire look more natural
-            // TODO: this probably belongs in a pixel shader
-            var worldPosition = chunk.LocalToWorldPosition(position);
-            // chunk.parentWorld.SetPixel(
-            //     worldPosition,
-            //     new FallingSandPixelData
-            //     {
-            //         Material = Material.Fire,
-            //         Color = new Color(255, random.Next(100, 200), random.Next(0, 100)),
-            //     }
-            // );
-
-            // Randomly emit smoke above if there is space
-            if (Random.Value.Next(100) < 5)
-            {
-                var abovePosition = new WorldPosition(worldPosition.X, worldPosition.Y - 1);
-                if (chunk.parentWorld.GetPixel(abovePosition).Data.Material == Material.Empty)
-                {
-                    chunk.parentWorld.SetPixel(
-                        abovePosition,
-                        new FallingSandPixelData
-                        {
-                            Material = Material.Smoke,
-                            Color = new Color(0, 255, 0),
-                        }
-                    );
-                }
-            }
-
-            // Randomly emit an ember if there is space below
-            if (Random.Value.Next(2000) < 1)
-            {
-                var belowPosition = new WorldPosition(worldPosition.X, worldPosition.Y + 1);
-                if (chunk.parentWorld.GetPixel(belowPosition).Data.Material == Material.Empty)
-                {
-                    chunk.parentWorld.SetPixel(
-                        belowPosition,
-                        new FallingSandPixelData
-                        {
-                            Material = Material.Ember,
-                            Color = new Color(255, 0, 0),
-                        }
-                    );
-                }
-            }
-
-            // Remove if we are touching water
-            foreach (var (dx, dy) in AdjacentOffsets)
-            {
-                var pixel = chunk.parentWorld.GetPixel(
-                    new WorldPosition(worldPosition.X + dx, worldPosition.Y + dy)
-                );
-                if (pixel.Data.Material == Material.Water)
-                {
-                    // Remove us
-                    chunk.EmptyPixel(position);
-                    // Replace the water with steam
-                    chunk.parentWorld.SetPixel(
-                        new WorldPosition(worldPosition.X + dx, worldPosition.Y + dy),
-                        new FallingSandPixelData
-                        {
-                            Material = Material.Steam,
-                            Color = new Color(0, 255, 0),
-                        }
-                    );
-                    break;
-                }
-                else if (Random.Value.Next(100) < pixel.Flammability)
-                {
-                    // Try converting adjacent pixels to fire
-                    chunk.parentWorld.SetPixel(
-                        new WorldPosition(worldPosition.X + dx, worldPosition.Y + dy),
-                        new FallingSandPixelData
-                        {
-                            Material = Material.Fire,
-                            Color = new Color(255, 0, 0),
-                        }
-                    );
-                }
-            }
-        }
+        // Special material behaviour
+        var movedInUpdater = PixelMaterialUpdater.UpdatePixel(Random.Value, chunk, position, this);
 
         // If the pixel did not move, sleep
-        if (!moved)
+        if (!moved && !movedInUpdater)
         {
             SleepCounter++;
 
@@ -319,11 +218,6 @@ class FallingSandPixel
             {
                 IsAwake = false;
             }
-        }
-
-        if (moved)
-        {
-            WakeAdjacentPixels(chunk, position);
         }
     }
 
@@ -464,21 +358,21 @@ class FallingSandPixel
         {
             // Swap the two pixels
             var otherPixel = chunk.parentWorld.GetPixel(newPosition);
-            chunk.parentWorld.SetPixel(newPosition, Data, Velocity);
+            var ourData = Data;
             chunk.parentWorld.SetPixel(position, otherPixel.Data, otherPixel.Velocity);
+            chunk.parentWorld.SetPixel(newPosition, ourData, Velocity);
         }
         else
         {
-            // Set the new pixel at the world level to enable cross-chunk moves
-            chunk.parentWorld.SetPixel(newPosition, Data, Velocity);
-            // Empty the current pixel
+            var ourData = Data;
             chunk.EmptyPixel(chunk.WorldToLocalPosition(position));
+            chunk.parentWorld.SetPixel(newPosition, ourData, Velocity);
         }
 
         return true;
     }
 
-    private static void WakeAdjacentPixels(FallingSandWorldChunk chunk, LocalPosition position)
+    public static void WakeAdjacentPixels(FallingSandWorldChunk chunk, LocalPosition position)
     {
         foreach (var (dx, dy) in AdjacentOffsets)
         {
@@ -500,7 +394,7 @@ class FallingSandPixel
 
     public void Empty()
     {
-        Data = new FallingSandPixelData { Material = Material.Empty, Color = Color.Black };
+        Data = new FallingSandPixelData { Material = Material.Empty, Color = Color.Transparent };
     }
 
     public void Set(FallingSandPixelData data, float velocity)
@@ -522,12 +416,7 @@ class FallingSandPixel
         IsFire = _isFire[materialIndex];
         Density = _density[materialIndex];
         Flammability = _flammability[materialIndex];
-
-        if (!IsFire)
-        {
-            Lifetime = 0;
-        }
-
+        Lifetime = 0;
         SleepCounter = 0;
     }
     #endregion

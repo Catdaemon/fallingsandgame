@@ -36,7 +36,7 @@ class FallingSandWorldChunk
                 pixels[y * Constants.CHUNK_WIDTH + x] = new FallingSandPixel(
                     this,
                     Material.Empty,
-                    new Color(0, 0, 0)
+                    Color.Transparent
                 );
             }
         }
@@ -123,29 +123,29 @@ class FallingSandWorldChunk
 
         // Perform a second pass over awakened pixels
         // This helps fill gaps by allowing immediate response to movements
-        if (anyPixelsUpdated)
-        {
-            for (
-                int y = !topFrame ? 0 : Constants.CHUNK_HEIGHT - 1; // Opposite direction of first pass
-                !topFrame ? y < Constants.CHUNK_HEIGHT : y >= 0;
-                y += !topFrame ? 1 : -1
-            )
-            {
-                for (
-                    int x = !leftFrame ? 0 : Constants.CHUNK_WIDTH - 1; // Opposite direction of first pass
-                    !leftFrame ? x < Constants.CHUNK_WIDTH : x >= 0;
-                    x += !leftFrame ? 1 : -1
-                )
-                {
-                    var pixel = pixels[y * Constants.CHUNK_WIDTH + x];
-                    if (pixel.IsAwake && pixel.LastUpdatedFrameId < parentWorld.CurrentFrameId)
-                    {
-                        var pixelPosition = new LocalPosition(x, y);
-                        pixel.Update(this, pixelPosition);
-                    }
-                }
-            }
-        }
+        // if (anyPixelsUpdated)
+        // {
+        //     for (
+        //         int y = !topFrame ? 0 : Constants.CHUNK_HEIGHT - 1; // Opposite direction of first pass
+        //         !topFrame ? y < Constants.CHUNK_HEIGHT : y >= 0;
+        //         y += !topFrame ? 1 : -1
+        //     )
+        //     {
+        //         for (
+        //             int x = !leftFrame ? 0 : Constants.CHUNK_WIDTH - 1; // Opposite direction of first pass
+        //             !leftFrame ? x < Constants.CHUNK_WIDTH : x >= 0;
+        //             x += !leftFrame ? 1 : -1
+        //         )
+        //         {
+        //             var pixel = pixels[y * Constants.CHUNK_WIDTH + x];
+        //             if (pixel.IsAwake && pixel.LastUpdatedFrameId < parentWorld.CurrentFrameId)
+        //             {
+        //                 var pixelPosition = new LocalPosition(x, y);
+        //                 pixel.Update(this, pixelPosition);
+        //             }
+        //         }
+        //     }
+        // }
 
         if (!anyPixelsUpdated)
         {
@@ -164,7 +164,7 @@ class FallingSandWorldChunk
         )
         {
             // Return an empty pixel if the requested position is outside of the chunk
-            return new FallingSandPixel(this, Material.Empty, Color.Black);
+            return new FallingSandPixel(this, Material.Empty, Color.Transparent);
         }
 
         return pixels[position.Y * Constants.CHUNK_WIDTH + position.X];
@@ -199,6 +199,7 @@ class FallingSandWorldChunk
         {
             AddPixelToDrawQueue(localPosition);
             Wake();
+            FallingSandPixel.WakeAdjacentPixels(this, localPosition);
         }
     }
 
@@ -228,6 +229,7 @@ class FallingSandWorldChunk
         }
         pixels[localPosition.Y * Constants.CHUNK_WIDTH + localPosition.X].Empty();
         AddPixelToDrawQueue(localPosition);
+        FallingSandPixel.WakeAdjacentPixels(this, localPosition);
         Wake();
     }
 
