@@ -221,6 +221,12 @@ class PhysicsSystem : ISystem
             in query,
             (Arch.Core.Entity entity, ref PhysicsBodyComponent physicsBody) =>
             {
+                if (physicsBody.PhysicsBody == null)
+                {
+                    throw new Exception(
+                        "Physics body is null in PhysicsBodyComponent - do not instantiate PhysicsBodyComponent outside of PhysicsSystem"
+                    );
+                }
                 // if (entity.Has<InputStateComponent>())
                 // {
                 //     // Update the physics object based on the input state

@@ -1,5 +1,6 @@
 using System;
 using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Graphics;
 
 namespace FallingSand;
 
@@ -10,6 +11,9 @@ static class Camera
     private static Vector2 MouseScreenPosition = new Vector2(0, 0);
     private static WorldPosition Size = new WorldPosition(0, 0);
     private static float Zoom = 1.0f;
+
+    // Store current GameTime for animation purposes
+    public static GameTime GameTime { get; private set; }
 
     // Returns true if the given position and size are visible on the screen
     // Taking into account the camera position, zoom and size
@@ -96,6 +100,17 @@ static class Camera
     public static void SetZoom(float zoom)
     {
         Zoom = zoom;
+    }
+
+    public static void Update(GameTime gameTime)
+    {
+        GameTime = gameTime;
+    }
+
+    public static void InitializeCamera(int width, int height, Viewport viewport)
+    {
+        Size = new WorldPosition(viewport.Width, viewport.Height);
+        SetPosition(width / 2, height / 2);
     }
 
     /// <summary>

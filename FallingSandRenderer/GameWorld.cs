@@ -24,6 +24,7 @@ class GameWorld
     private GameChunkPool gameChunkPool;
     private readonly AsyncChunkGenerator asyncChunkGenerator;
     private readonly AsyncChunkPhysicsCalculator asyncChunkPhysicsCalculator;
+    private Effect waterShaderEffect;
 
     private readonly DoEvery createNewChunksTimer;
     private readonly DoEvery updateGameWorldTimer;
@@ -58,7 +59,8 @@ class GameWorld
         SpriteBatch spriteBatch,
         GraphicsDevice graphicsDevice,
         nkast.Aether.Physics2D.Dynamics.World physicsWorld,
-        FallingSandWorld.FallingSandWorld sandWorld
+        FallingSandWorld.FallingSandWorld sandWorld,
+        Game game
     )
     {
         var generator = new WorldGenerationManager();
@@ -79,6 +81,9 @@ class GameWorld
 
         this.spriteBatch = spriteBatch;
 
+        // Load the water shader
+        waterShaderEffect = null; // game.Content.Load<Effect>("Shaders/WaterEffect");
+
         var pixelTexture = new Texture2D(graphicsDevice, 1, 1);
         pixelTexture.SetData([Color.White]);
 
@@ -89,7 +94,8 @@ class GameWorld
             sandWorld,
             worldTiles,
             physicsWorld,
-            materialTextureSampler
+            materialTextureSampler,
+            waterShaderEffect
         );
         gameChunkPool.Initialize(Constants.INITIAL_CHUNK_POOL_SIZE);
 
@@ -211,7 +217,7 @@ class GameWorld
         // Draw to the render targets
         foreach (var (_, chunk) in visibleChunks)
         {
-            chunk.Draw();
+            chunk.Draw(Camera.GameTime);
         }
     }
 

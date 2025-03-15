@@ -29,6 +29,11 @@ class GameChunk
     public bool IsCalculatingPhysics = false;
     private readonly ConcurrentBag<Vertices> FallingSandWorldChunkPolys = [];
 
+    // Water shader effect
+    private Effect waterShaderEffect;
+    private RenderTarget2D waterRenderTarget;
+    private float totalTime = 0f;
+
     // thread-safe list
     private readonly ConcurrentBag<Body> PhysicsBodies = new();
     private readonly World PhysicsWorld;
@@ -42,7 +47,8 @@ class GameChunk
         FallingSandWorld.FallingSandWorld world,
         GeneratedWorldInstance worldTiles,
         World physicsWorld,
-        MaterialTextureSampler materialTextureSampler
+        MaterialTextureSampler materialTextureSampler,
+        Effect waterEffect
     )
     {
         WorldOrigin = worldOrigin;
@@ -52,6 +58,7 @@ class GameChunk
         SpriteBatch = spriteBatch;
         PhysicsWorld = physicsWorld;
         MaterialTextureSampler = materialTextureSampler;
+        waterShaderEffect = waterEffect;
 
         RenderTarget = new RenderTarget2D(
             graphicsDevice,
@@ -59,11 +66,21 @@ class GameChunk
             Constants.CHUNK_HEIGHT,
             false,
             SurfaceFormat.Color,
-            DepthFormat.None,
+            DepthFormat.Depth24, // Use depth buffer
             0,
             RenderTargetUsage.PreserveContents
         );
-        ;
+
+        waterRenderTarget = new RenderTarget2D(
+            graphicsDevice,
+            Constants.CHUNK_WIDTH,
+            Constants.CHUNK_HEIGHT,
+            false,
+            SurfaceFormat.Color,
+            DepthFormat.Depth24, // Use depth buffer
+            0,
+            RenderTargetUsage.PreserveContents
+        );
 
         graphicsDevice.SetRenderTarget(RenderTarget);
         graphicsDevice.Clear(Color.Transparent);
@@ -109,7 +126,7 @@ class GameChunk
                 pixelBuffer[y * Constants.CHUNK_WIDTH + x] = new FallingSandPixelData
                 {
                     Material = pixel,
-                    Color = MaterialTextureSampler.GetPixel(pixel, x, y)
+                    Color = MaterialTextureSampler.GetPixel(pixel, x, y),
                 };
             }
         }
@@ -158,29 +175,81 @@ class GameChunk
         {
             for (int x = 0; x < Constants.CHUNK_WIDTH; x++)
             {
-                var pixelData = SandChunk.pixels[y * Constants.CHUNK_WIDTH + x].Data;
-                // Draw to render target in the correct position
-                SpriteBatch.Draw(PixelTexture, new Rectangle(x, y, 1, 1), pixelData.Color);
+                var pixel = SandChunk.pixels[y * Constants.CHUNK_WIDTH + x];
+                var pixelData = pixel.Data;
+
+                // Draw normal pixels as usual
+                if (pixelData.Material != Material.Water)
+                {
+                    SpriteBatch.Draw(PixelTexture, new Rectangle(x, y, 1, 1), pixelData.Color);
+                }
             }
         }
+
+        // Draw water pixels separately using shader
+        DrawWaterPixels();
     }
 
-    public static BlendState overwriteBlend = new BlendState
+    private void DrawWaterPixels()
+    {
+        if (waterShaderEffect == null)
+            return;
+
+        // Set the water render target to capture what's been drawn so far
+        GraphicsDevice.SetRenderTarget(waterRenderTarget);
+        GraphicsDevice.Clear(Color.Transparent);
+
+        // Begin sprite batch with water shader
+        waterShaderEffect.Parameters["TotalTime"].SetValue(totalTime);
+        waterShaderEffect.Parameters["ScreenTexture"].SetValue(RenderTarget);
+
+        SpriteBatch.Begin(effect: waterShaderEffect);
+
+        // Draw only water pixels
+        for (int y = 0; y < Constants.CHUNK_HEIGHT; y++)
+        {
+            for (int x = 0; x < Constants.CHUNK_WIDTH; x++)
+            {
+                var pixel = SandChunk.pixels[y * Constants.CHUNK_WIDTH + x];
+                var pixelData = pixel.Data;
+
+                if (pixelData.Material == Material.Water)
+                {
+                    // Draw water pixels with the shader
+                    SpriteBatch.Draw(PixelTexture, new Rectangle(x, y, 1, 1), pixelData.Color);
+                }
+            }
+        }
+
+        SpriteBatch.End();
+
+        // Switch back to main render target and copy water pixels
+        GraphicsDevice.SetRenderTarget(RenderTarget);
+
+        SpriteBatch.Begin(blendState: BlendState.AlphaBlend);
+        SpriteBatch.Draw(waterRenderTarget, Vector2.Zero, Color.White);
+        SpriteBatch.End();
+    }
+
+    public static readonly BlendState overwriteBlend = new()
     {
         ColorSourceBlend = Blend.SourceAlpha,
         ColorDestinationBlend = Blend.SourceColor,
         ColorBlendFunction = BlendFunction.Add,
         AlphaSourceBlend = Blend.One,
-        AlphaDestinationBlend = Blend.Zero
+        AlphaDestinationBlend = Blend.Zero,
     };
 
     // Draw to the render target
-    public void Draw()
+    public void Draw(GameTime gameTime)
     {
         if (!HasGeneratedMap || SandChunk == null)
         {
             return;
         }
+
+        // Update total time for water animation
+        totalTime += (float)gameTime.ElapsedGameTime.TotalSeconds;
 
         GraphicsDevice.SetRenderTarget(RenderTarget);
 
@@ -188,7 +257,12 @@ class GameChunk
         var hasPixels = SandChunk.pixelsToDraw.Any();
         if (hasPixels)
         {
+            // First draw non-water pixels
             SpriteBatch.Begin(blendState: overwriteBlend);
+
+            // Water pixels to draw after regular pixels
+            List<LocalPosition> waterPositions = [];
+
             while (SandChunk.pixelsToDraw.TryTake(out var position) && renderedPixels < 1000)
             {
                 if (position.X == -1 && position.Y == -1)
@@ -199,9 +273,17 @@ class GameChunk
                 else
                 {
                     // Get pixel data
-                    var pixelData = SandChunk.GetPixel(position).Data;
+                    var pixel = SandChunk.GetPixel(position);
+                    var pixelData = pixel.Data;
 
-                    // Draw to render target in the correct position
+                    if (pixelData.Material == Material.Water)
+                    {
+                        // Collect water pixels for later drawing with shader
+                        waterPositions.Add(position);
+                    }
+
+                    // TODO: should this be drawn?
+                    // Draw regular pixels
                     SpriteBatch.Draw(
                         PixelTexture,
                         new Rectangle(position.X, position.Y, 1, 1),
@@ -211,34 +293,42 @@ class GameChunk
 
                 renderedPixels++;
             }
+
             SpriteBatch.End();
+
+            // Now draw water pixels using shader
+            if (waterPositions.Count > 0 && waterShaderEffect != null)
+            {
+                // Set the water render target
+                GraphicsDevice.SetRenderTarget(waterRenderTarget);
+                GraphicsDevice.Clear(Color.Transparent);
+
+                // Apply water shader
+                waterShaderEffect.Parameters["TotalTime"].SetValue(totalTime);
+                waterShaderEffect.Parameters["ScreenTexture"].SetValue(RenderTarget);
+
+                SpriteBatch.Begin(effect: waterShaderEffect);
+
+                foreach (var position in waterPositions)
+                {
+                    var pixelData = SandChunk.GetPixel(position).Data;
+                    SpriteBatch.Draw(
+                        PixelTexture,
+                        new Rectangle(position.X, position.Y, 1, 1),
+                        pixelData.Color
+                    );
+                }
+
+                SpriteBatch.End();
+
+                // Switch back to main render target and copy water pixels
+                GraphicsDevice.SetRenderTarget(RenderTarget);
+
+                SpriteBatch.Begin(blendState: BlendState.AlphaBlend);
+                SpriteBatch.Draw(waterRenderTarget, Vector2.Zero, Color.White);
+                SpriteBatch.End();
+            }
         }
-
-        // Draw outline
-        // var outlineColor = new Color(255, 0, 0);
-        // if (SandChunk.isAwake)
-        // {
-        //     outlineColor = new Color(0, 255, 0);
-        // }
-
-        // SpriteBatch.Begin();
-        // SpriteBatch.Draw(PixelTexture, new Rectangle(0, 0, Constants.CHUNK_WIDTH, 1), outlineColor);
-        // SpriteBatch.Draw(
-        //     PixelTexture,
-        //     new Rectangle(0, 0, 1, Constants.CHUNK_HEIGHT),
-        //     outlineColor
-        // );
-        // SpriteBatch.Draw(
-        //     PixelTexture,
-        //     new Rectangle(Constants.CHUNK_WIDTH - 1, 0, 1, Constants.CHUNK_HEIGHT),
-        //     outlineColor
-        // );
-        // SpriteBatch.Draw(
-        //     PixelTexture,
-        //     new Rectangle(0, Constants.CHUNK_HEIGHT - 1, Constants.CHUNK_WIDTH, 1),
-        //     outlineColor
-        // );
-        // SpriteBatch.End();
 
         GraphicsDevice.SetRenderTarget(null);
     }
@@ -308,6 +398,12 @@ class GameChunk
 
     public void Unload()
     {
+        // Clean up render targets
+        if (waterRenderTarget != null && !waterRenderTarget.IsDisposed)
+        {
+            waterRenderTarget.Dispose();
+        }
+
         // Unload the physics bodies
         foreach (var body in PhysicsBodies)
         {

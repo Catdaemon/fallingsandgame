@@ -1,7 +1,6 @@
 ﻿using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.Reflection.Metadata.Ecma335;
+using System.Diagnostics;
 using Arch.Core;
 using FallingSand.Entity.Component;
 using FallingSand.Entity.System;
@@ -18,6 +17,7 @@ public class Game1 : Game
 {
     private readonly MgFrameRate FrameCounter = new();
 
+    private GraphicsDeviceManager graphics;
     private SpriteBatch _spriteBatch;
     private SpriteFont spriteFont;
 
@@ -36,50 +36,35 @@ public class Game1 : Game
 
     public Game1()
     {
-        // var expectedChunkWidth =
-        //     (worldSizeX / Constants.CHUNK_WIDTH) + Constants.OFF_SCREEN_CHUNK_UPDATE_RADIUS;
-        // var expectedChunkHeight =
-        //     (worldSizeY / Constants.CHUNK_HEIGHT) + Constants.OFF_SCREEN_CHUNK_UPDATE_RADIUS;
-        // var expectedChunkCount = expectedChunkWidth * expectedChunkHeight);
-        // Constants.INITIAL_CHUNK_POOL_SIZE = expectedChunkCount;
-
-
-        var _graphics = new GraphicsDeviceManager(this);
-        _graphics.PreferredBackBufferWidth = worldSizeX;
-        _graphics.PreferredBackBufferHeight = worldSizeY;
+        graphics = new(this);
         Content.RootDirectory = "Content";
         IsMouseVisible = true;
-
-        // vsync
-        _graphics.SynchronizeWithVerticalRetrace = false;
-        IsFixedTimeStep = false;
-
-        gameWorld = new();
-
+        gameWorld = new FallingSandRenderer.GameWorld();
         ecsWorld = Arch.Core.World.Create();
-        systemManager = new(ecsWorld);
-
-        physicsDebugView = new DebugView(physicsWorld);
-        physicsDebugView.AppendFlags(DebugViewFlags.Shape);
-        physicsDebugView.AppendFlags(DebugViewFlags.Joint);
-        physicsDebugView.AppendFlags(DebugViewFlags.ContactPoints);
-        physicsDebugView.AppendFlags(DebugViewFlags.AABB);
-        physicsDebugView.AppendFlags(DebugViewFlags.DebugPanel);
-        physicsDebugView.AppendFlags(DebugViewFlags.PerformanceGraph);
+        systemManager = new SystemManager(ecsWorld);
+        physicsDebugView = new DebugView(physicsWorld) { Enabled = true };
     }
 
     protected override void Initialize()
     {
-        Camera.SetPosition(new WorldPosition(64, 64));
-        Camera.SetSize(new WorldPosition(worldSizeX, worldSizeY));
-        Camera.SetZoom(2.0f);
+        Camera.InitializeCamera(worldSizeX, worldSizeY, GraphicsDevice.Viewport);
 
-        sandWorld = new FallingSandWorld.FallingSandWorld(new WorldPosition(1000, 1000));
+        sandWorld = new FallingSandWorld.FallingSandWorld(
+            new WorldPosition(worldSizeX, worldSizeY)
+        );
 
         systemManager.RegisterSystems(physicsWorld, sandWorld);
 
-        // Create a player entity
-        ecsWorld.Create(
+        base.Initialize();
+    }
+
+    protected override void LoadContent()
+    {
+        _spriteBatch = new SpriteBatch(GraphicsDevice);
+        FrameCounter.LoadSetUp(this, graphics, _spriteBatch, false, true, false, false, 60, true);
+
+        // Create the player
+        var player = ecsWorld.Create(
             new PositionComponent(),
             new BoundingBoxComponent(),
             new HealthComponent() { Current = 100, Max = 100 },
@@ -97,16 +82,15 @@ public class Game1 : Game
             new SandPixelReaderComponent()
         );
 
-        base.Initialize();
-    }
-
-    protected override void LoadContent()
-    {
-        _spriteBatch = new SpriteBatch(GraphicsDevice);
         spriteFont = Content.Load<SpriteFont>("DiagnosticsFont");
-        gameWorld.Init("hello", _spriteBatch, GraphicsDevice, physicsWorld, sandWorld);
-        systemManager.InitializeGraphics(GraphicsDevice);
         physicsDebugView.LoadContent(GraphicsDevice, Content);
+
+        systemManager.InitializeGraphics(GraphicsDevice);
+
+        var seed = "test seed";
+        gameWorld.Init(seed, _spriteBatch, GraphicsDevice, physicsWorld, sandWorld, this);
+
+        base.LoadContent();
     }
 
     private long lastCollectionCount = 0;
@@ -145,50 +129,73 @@ public class Game1 : Game
             }
         }
 
-        if (Mouse.GetState().LeftButton == ButtonState.Pressed)
+        // Check if the mouse is used
+        var mouseState = Mouse.GetState();
+        if (mouseState.LeftButton == ButtonState.Pressed)
         {
-            // Set an 8x8 square of sand pixels at the mouse position
-            for (var x = 0; x < 8; x++)
+            // Paint material at cursor location
+            var mousePos = new Vector2(mouseState.X, mouseState.Y);
+            var worldPos = Camera.ScreenToWorldPosition(mousePos);
+
+            // Draw in a circle around the cursor
+
+            for (int y = -3; y <= 3; y++)
             {
-                for (var y = 0; y < 8; y++)
+                for (int x = -3; x <= 3; x++)
                 {
-                    gameWorld.sandWorld.SetPixel(
-                        new WorldPosition(
-                            Camera.GetMouseWorldPosition().X + x,
-                            Camera.GetMouseWorldPosition().Y + y
-                        ),
-                        new FallingSandPixelData() { Material = paintMaterial, Color = paintColor }
-                    );
+                    if (x * x + y * y <= 9) // Make it a circle, not a square
+                    {
+                        var pixelData = new FallingSandWorld.FallingSandPixelData
+                        {
+                            Material = paintMaterial,
+                            Color = paintColor,
+                        };
+                        sandWorld.SetPixel(
+                            new WorldPosition(worldPos.X + x, worldPos.Y + y),
+                            pixelData
+                        );
+                    }
                 }
             }
         }
 
+        Camera.Update(gameTime);
         systemManager.Update(gameTime);
 
         FrameCounter.Update(gameTime);
-
-        long currentCount = GC.CollectionCount(2);
-        if (currentCount > lastCollectionCount)
-        {
-            Console.WriteLine("Full GC occurred");
-            lastCollectionCount = currentCount;
-        }
 
         base.Update(gameTime);
     }
 
     protected override void Draw(GameTime gameTime)
     {
+        // Draw the game world to its render targets
         gameWorld.DrawRenderTargets();
+
+        // Clear the screen between drawing the render targets and the rest
+        // Otherwise the background will be overwritten
         GraphicsDevice.Clear(Color.CornflowerBlue);
 
-        // FrameCounter.DrawFps(_spriteBatch, spriteFont, new Vector2(10, 10), Color.White);
-
+        // Draw the render targets to the screen
         gameWorld.Draw(gameTime);
 
         systemManager.Draw(gameTime);
 
-        // physicsDebugView.RenderDebugData(Camera.GetProjectionMatrix(), Camera.GetViewMatrix());
+        physicsDebugView.RenderDebugData(
+            Camera.GetTransformMatrix(),
+            Matrix.CreateOrthographicOffCenter(
+                0,
+                GraphicsDevice.Viewport.Width,
+                GraphicsDevice.Viewport.Height,
+                0,
+                0,
+                1
+            )
+        );
+
+        _spriteBatch.Begin();
+        FrameCounter.DrawFps(_spriteBatch, spriteFont, new Vector2(5, 5), Color.Yellow);
+        _spriteBatch.End();
 
         base.Draw(gameTime);
     }

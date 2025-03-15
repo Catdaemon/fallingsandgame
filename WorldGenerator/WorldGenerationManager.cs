@@ -13,7 +13,7 @@ class WorldGenerationManager
     public const int IMAGE_SIZE = 128;
     private Dictionary<string, List<TileDefinition>> BiomeTiles = [];
     private readonly PriorityQueue<Tile, int> UncollapsedTiles = new();
-    private Stack<(
+    private readonly Stack<(
         Tile tile,
         List<TileDefinition> previousState,
         List<TileDefinition> removedPossibilities
