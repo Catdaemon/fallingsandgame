@@ -19,12 +19,7 @@
 /processorParam:TextureFormat=Color
 /build:DiagnosticsFont.spritefont
 
-#begin Shaders/TestShader.fx
-/importer:EffectImporter
-/processor:EffectProcessor
-/build:Shaders/TestShader.fx
-
-# #begin Shaders/WaterEffect.fx
+#begin Shaders/WaterEffect.fx
 # /importer:EffectImporter
 # /processor:EffectProcessor
 # /processorParam:DebugMode=Auto

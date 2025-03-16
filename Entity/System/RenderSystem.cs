@@ -27,10 +27,31 @@ class RenderSystem : ISystem
         pixelTexture.SetData(new[] { Color.White });
     }
 
-    public void Update(GameTime gameTime) { }
+    public void Update(GameTime gameTime)
+    {
+        // Update all sprites
+        var withSpriteQuery = new QueryDescription().WithAny<SpriteComponent>();
+        World.Query(
+            in withSpriteQuery,
+            (Arch.Core.Entity entity, ref SpriteComponent sprite) =>
+            {
+                sprite.Animation.Update(gameTime);
+            }
+        );
+    }
 
     public void Draw(GameTime gameTime)
     {
+        // Draw sprites
+        var withSpriteQuery = new QueryDescription().WithAll<SpriteComponent, PositionComponent>();
+        World.Query(
+            in withSpriteQuery,
+            (Arch.Core.Entity entity, ref SpriteComponent sprite, ref PositionComponent position) =>
+            {
+                sprite.Animation.Draw(spriteBatch, position.Position);
+            }
+        );
+
         // Debug draw physics objects
         var withPhysicsBodyQuery = new QueryDescription().WithAny<PhysicsBodyComponent>();
         World.Query(
