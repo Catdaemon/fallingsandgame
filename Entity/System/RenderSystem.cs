@@ -46,7 +46,8 @@ class RenderSystem : ISystem
             in withSpriteQuery,
             (Arch.Core.Entity entity, ref SpriteComponent sprite, ref PositionComponent position) =>
             {
-                sprite.Animation.Draw(spriteBatch, position.Position, sprite.DestinationSize);
+                var flip = position.FacingDirection.X < 0;
+                sprite.Animation.Draw(spriteBatch, position.Position, sprite.DestinationSize, flip);
             }
         );
         spriteBatch.End();

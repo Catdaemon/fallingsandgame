@@ -60,7 +60,12 @@ class SpriteSheetAnimation
         LastUpdateTime = (int)gameTime.TotalGameTime.TotalMilliseconds;
     }
 
-    public void Draw(SpriteBatch spriteBatch, Vector2 position, Rectangle destinationSize)
+    public void Draw(
+        SpriteBatch spriteBatch,
+        Vector2 position,
+        Rectangle destinationSize,
+        bool flipped = false
+    )
     {
         // Calculate the current frame position with wrapping
         int totalFrameOffset = StartColumn + CurrentFrame;
@@ -78,15 +83,18 @@ class SpriteSheetAnimation
 
         // Draw centered on the position, scaled to fit the destination size
         spriteBatch.Draw(
-            texture: SpriteSheet.Texture,
-            sourceRectangle: sourceRectangle,
-            destinationRectangle: new Rectangle(
-                (int)position.X - destinationSize.Width / 2,
-                (int)position.Y - destinationSize.Height / 2,
-                destinationSize.Width,
-                destinationSize.Height
+            SpriteSheet.Texture,
+            position,
+            sourceRectangle,
+            Color.White,
+            0f,
+            new Vector2(SpriteSheet.FrameWidth / 2, SpriteSheet.FrameHeight / 2),
+            new Vector2(
+                (float)destinationSize.Width / SpriteSheet.FrameWidth,
+                (float)destinationSize.Height / SpriteSheet.FrameHeight
             ),
-            color: Color.White
+            flipped ? SpriteEffects.FlipHorizontally : SpriteEffects.None,
+            0f
         );
     }
 

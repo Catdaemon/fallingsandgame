@@ -248,6 +248,15 @@ class PhysicsSystem : ISystem
                     positionComponent.Velocity = Convert.MetersToPixels(
                         physicsBody.PhysicsBody.LinearVelocity
                     );
+                    // Update the facing direction if we are moving
+                    if (Math.Abs(positionComponent.Velocity.X) > 1f)
+                    {
+                        positionComponent.FacingDirection.X = positionComponent.Velocity.X;
+                    }
+                    if (Math.Abs(positionComponent.Velocity.Y) > 1f)
+                    {
+                        positionComponent.FacingDirection.Y = positionComponent.Velocity.Y;
+                    }
                 }
                 if (entity.Has<BoundingBoxComponent>())
                 {
