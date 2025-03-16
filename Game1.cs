@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using Arch.Core;
 using FallingSand.Entity.Component;
+using FallingSand.Entity.Sprites;
 using FallingSand.Entity.System;
 using FallingSandWorld;
 using Microsoft.Xna.Framework;
@@ -63,6 +64,18 @@ public class Game1 : Game
         _spriteBatch = new SpriteBatch(GraphicsDevice);
         FrameCounter.LoadSetUp(this, graphics, _spriteBatch, false, true, false, false, 60, true);
 
+        spriteFont = Content.Load<SpriteFont>("DiagnosticsFont");
+        physicsDebugView.LoadContent(GraphicsDevice, Content);
+
+        SpriteManager.Initialize(Content);
+
+        systemManager.InitializeGraphics(GraphicsDevice);
+
+        var seed = "test seed";
+        gameWorld.Init(seed, _spriteBatch, GraphicsDevice, physicsWorld, sandWorld, this);
+
+        base.LoadContent();
+
         // Create the player
         var player = ecsWorld.Create(
             new PositionComponent(),
@@ -79,21 +92,10 @@ public class Game1 : Game
                 InitialPosition = new WorldPosition(100, 100),
                 CreateSensors = true,
             },
-            new SandPixelReaderComponent()
+            new SandPixelReaderComponent(),
+            new SpriteComponent("Player", "Idle", new Rectangle(0, 0, 16, 16))
         );
-
-        spriteFont = Content.Load<SpriteFont>("DiagnosticsFont");
-        physicsDebugView.LoadContent(GraphicsDevice, Content);
-
-        systemManager.InitializeGraphics(GraphicsDevice);
-
-        var seed = "test seed";
-        gameWorld.Init(seed, _spriteBatch, GraphicsDevice, physicsWorld, sandWorld, this);
-
-        base.LoadContent();
     }
-
-    private long lastCollectionCount = 0;
 
     protected override void Update(GameTime gameTime)
     {
@@ -181,21 +183,11 @@ public class Game1 : Game
 
         systemManager.Draw(gameTime);
 
-        physicsDebugView.RenderDebugData(
-            Camera.GetTransformMatrix(),
-            Matrix.CreateOrthographicOffCenter(
-                0,
-                GraphicsDevice.Viewport.Width,
-                GraphicsDevice.Viewport.Height,
-                0,
-                0,
-                1
-            )
-        );
+        physicsDebugView.RenderDebugData(Camera.GetProjectionMatrix(), Camera.GetViewMatrix());
 
-        _spriteBatch.Begin();
-        FrameCounter.DrawFps(_spriteBatch, spriteFont, new Vector2(5, 5), Color.Yellow);
-        _spriteBatch.End();
+        // _spriteBatch.Begin();
+        // FrameCounter.DrawFps(_spriteBatch, spriteFont, new Vector2(5, 5), Color.Yellow);
+        // _spriteBatch.End();
 
         base.Draw(gameTime);
     }

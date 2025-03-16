@@ -93,6 +93,27 @@ class KinematicMovementSystem : ISystem
                 }
 
                 physicsBodyRef.LinearVelocity = new Vector2(xVelocity, yVelocity);
+
+                // Set the animation if applicable
+                if (entity.Has<SpriteComponent>())
+                {
+                    var sprite = entity.Get<SpriteComponent>();
+                    if (isGrounded)
+                    {
+                        if (Math.Abs(xVelocity) > 0.1)
+                        {
+                            sprite.SetAnimation("Run");
+                        }
+                        else
+                        {
+                            sprite.SetAnimation("Idle");
+                        }
+                    }
+                    else
+                    {
+                        sprite.SetAnimation("Jump");
+                    }
+                }
             }
         );
     }

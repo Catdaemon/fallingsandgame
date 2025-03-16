@@ -1,3 +1,4 @@
+using System;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 
@@ -6,38 +7,91 @@ namespace FallingSand.Entity.Sprites;
 class SpriteSheetAnimation
 {
     public SpriteSheet SpriteSheet;
-    public int Row;
+    public int StartRow;
     public int StartColumn;
-    public int EndColumn;
+    public int Duration;
     public int CurrentFrame;
+    public int LastUpdateTime = 0;
+    public bool Loop;
 
-    public SpriteSheetAnimation(SpriteSheet spriteSheet, int row, int startColumn, int endColumn)
+    public SpriteSheetAnimation(
+        SpriteSheet spriteSheet,
+        int startRow,
+        int startColumn,
+        int duration,
+        bool loop
+    )
     {
         SpriteSheet = spriteSheet;
+        StartRow = startRow;
         StartColumn = startColumn;
-        EndColumn = endColumn;
-        Row = row;
+        Duration = duration;
+        CurrentFrame = 0;
+        Loop = loop;
     }
 
     public SpriteSheetAnimation(SpriteSheet spriteSheet, int row, int column)
-        : this(spriteSheet, row, column, column) { }
+        : this(spriteSheet, row, column, 0, loop: false) { }
 
     public void Update(GameTime gameTime)
     {
-        // Calculate the total frames in the animation
-        var totalFrames = (EndColumn - StartColumn + 1) * SpriteSheet.Columns;
+        if (Duration == 0)
+        {
+            return;
+        }
 
-        // Calculate the frame time in milliseconds
-        var frameTime = 1000 / SpriteSheet.FrameRate;
+        if (
+            gameTime.TotalGameTime.TotalMilliseconds - LastUpdateTime
+            < 1000 / SpriteSheet.FrameRate
+        )
+        {
+            return;
+        }
 
-        // Calculate the current frame based on the elapsed time
-        var elapsed = (float)gameTime.TotalGameTime.TotalMilliseconds;
-        CurrentFrame = (int)(elapsed / frameTime) % totalFrames;
+        if (Loop)
+        {
+            CurrentFrame = (CurrentFrame + 1) % Duration;
+        }
+        else
+        {
+            CurrentFrame = Math.Min(CurrentFrame + 1, Duration - 1);
+        }
+
+        LastUpdateTime = (int)gameTime.TotalGameTime.TotalMilliseconds;
     }
 
-    public void Draw(SpriteBatch spriteBatch, Vector2 position)
+    public void Draw(SpriteBatch spriteBatch, Vector2 position, Rectangle destinationSize)
     {
-        var sourceRectangle = SpriteSheet.GetSourceRectangle(Row, StartColumn + CurrentFrame);
-        spriteBatch.Draw(SpriteSheet.Texture, position, sourceRectangle, Color.White);
+        // Calculate the current frame position with wrapping
+        int totalFrameOffset = StartColumn + CurrentFrame;
+        int currentColumn = totalFrameOffset % SpriteSheet.Columns;
+        int rowOffset = totalFrameOffset / SpriteSheet.Columns;
+        int currentRow = StartRow + rowOffset;
+
+        // Create the source rectangle from the current position
+        Rectangle sourceRectangle = new Rectangle(
+            currentColumn * SpriteSheet.FrameWidth,
+            currentRow * SpriteSheet.FrameHeight,
+            SpriteSheet.FrameWidth,
+            SpriteSheet.FrameHeight
+        );
+
+        // Draw centered on the position, scaled to fit the destination size
+        spriteBatch.Draw(
+            texture: SpriteSheet.Texture,
+            sourceRectangle: sourceRectangle,
+            destinationRectangle: new Rectangle(
+                (int)position.X - destinationSize.Width / 2,
+                (int)position.Y - destinationSize.Height / 2,
+                destinationSize.Width,
+                destinationSize.Height
+            ),
+            color: Color.White
+        );
+    }
+
+    public void Reset()
+    {
+        CurrentFrame = 0;
     }
 }

@@ -12,8 +12,14 @@ class SpriteAnimations
         SpriteSheet = spriteSheet;
     }
 
-    public void Add(string name, int row, int startColumn, int endColumn)
+    public void Add(string name, int startRow, int startColumn, int frameCount, bool loop)
     {
-        Animations[name] = new SpriteSheetAnimation(SpriteSheet, row, startColumn, endColumn);
+        Animations[name] = new SpriteSheetAnimation(
+            SpriteSheet,
+            startRow,
+            startColumn,
+            frameCount,
+            loop
+        );
     }
 }

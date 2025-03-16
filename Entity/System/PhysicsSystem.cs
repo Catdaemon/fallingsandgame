@@ -176,8 +176,8 @@ class PhysicsSystem : ISystem
             {
                 var capsule = entity.Get<CapsulePhysicsBodyComponent>();
                 createdBody = PhysicsWorld.CreateCapsule(
-                    Convert.PixelsToMeters(capsule.Height),
-                    Convert.PixelsToMeters(capsule.Width),
+                    Convert.PixelsToMeters(capsule.Height) / 2,
+                    Convert.PixelsToMeters(capsule.Width) / 2,
                     capsule.Density,
                     Convert.PixelsToMeters(
                         new Vector2(capsule.InitialPosition.X, capsule.InitialPosition.Y)
