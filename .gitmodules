@@ -1,0 +1,3 @@
+[submodule "Arch"]
+	path = Arch
+	url = git@github.com:Catdaemon/Arch.git

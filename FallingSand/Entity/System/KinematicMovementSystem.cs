@@ -15,6 +15,7 @@ class KinematicMovementSystem : ISystem
 {
     private readonly World World;
     private const float RaycastDistance = 1f; // Distance to cast for ground detection
+    private Random random = new();
 
     public KinematicMovementSystem(World world)
     {
@@ -56,14 +57,21 @@ class KinematicMovementSystem : ISystem
 
     public void Update(GameTime gameTime)
     {
+        float delta = (float)gameTime.ElapsedGameTime.TotalSeconds;
+
         // Find entities with the necessary components
-        var query = new QueryDescription().WithAll<PhysicsBodyComponent, InputStateComponent>();
+        var query = new QueryDescription().WithAll<
+            PhysicsBodyComponent,
+            InputStateComponent,
+            PositionComponent
+        >();
         World.Query(
             in query,
             (
                 Arch.Core.Entity entity,
                 ref PhysicsBodyComponent physicsBody,
-                ref InputStateComponent inputState
+                ref InputStateComponent inputState,
+                ref PositionComponent positionComponent
             ) =>
             {
                 physicsBody.PhysicsBody.FixedRotation = true;
@@ -237,22 +245,44 @@ class KinematicMovementSystem : ISystem
                     {
                         if (inputState.Value.Jump && jetpack.Fuel > 0)
                         {
-                            jetpack.Fuel -= 0.1f;
-                            yVelocity -= 0.005f;
+                            jetpack.Fuel -= 1f * delta;
+                            yVelocity -= 20f * delta;
 
-                            // Spawn a particle
-                            World.Create(
-                                new PositionComponent()
-                                {
-                                    Position = Convert.MetersToPixels(physicsBodyRef.Position),
-                                    Velocity = new Vector2(0, -0.1f),
-                                },
-                                new ParticleComponent() { Color = Color.Black, Size = 8 },
-                                new LifetimeComponent(
-                                    1000,
-                                    (int)gameTime.TotalGameTime.TotalMilliseconds
-                                )
-                            );
+                            var spawnParticle = random.Next(0, 2) == 0;
+                            if (spawnParticle)
+                            {
+                                var particleSpawnPosition =
+                                    positionComponent.FacingDirection.X > 0
+                                        ? new Vector2(-4, 4)
+                                        : new Vector2(4, 4);
+                                var particleHorizontalSpray = ((float)random.Next(-20, 20)) / 50f;
+                                var particleVelocity =
+                                    new Vector2(0, Math.Max(yVelocity, 0))
+                                    + new Vector2(particleHorizontalSpray, 0);
+
+                                // Spawn a particle
+                                World.Create(
+                                    new PositionComponent()
+                                    {
+                                        Position =
+                                            Convert.MetersToPixels(physicsBodyRef.Position)
+                                            + particleSpawnPosition,
+                                        Velocity = particleVelocity,
+                                    },
+                                    new ParticleComponent()
+                                    {
+                                        Color = Color.Black,
+                                        Size = 1,
+                                        Fade = true,
+                                        Collide = false,
+                                        Gravity = true,
+                                    },
+                                    new LifetimeComponent(
+                                        1000,
+                                        (int)gameTime.TotalGameTime.TotalMilliseconds
+                                    )
+                                );
+                            }
                         }
                     }
                     if (isGrounded)

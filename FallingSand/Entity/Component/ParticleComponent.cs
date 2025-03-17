@@ -7,6 +7,9 @@ struct ParticleComponent
 {
     public int LifeTime { get; set; }
     public int CreatedTime { get; set; }
+    public bool Fade { get; set; }
+    public bool Collide { get; set; }
+    public bool Gravity { get; set; }
     public float Size { get; set; }
     public Color Color { get; set; }
 }

@@ -5,6 +5,7 @@ using Arch.Core.Extensions;
 using FallingSand.Entity.Component;
 using Microsoft.Xna.Framework;
 using nkast.Aether.Physics2D.Dynamics;
+using nkast.Aether.Physics2D.Dynamics.Contacts;
 
 namespace FallingSand.Entity.System;
 
@@ -12,6 +13,7 @@ class PhysicsSystem : ISystem
 {
     private readonly nkast.Aether.Physics2D.Dynamics.World PhysicsWorld;
     private readonly Arch.Core.World ECSWorld;
+    private static Object particleTag = new Object();
 
     public PhysicsSystem(
         Arch.Core.World ecsWorld,
@@ -25,7 +27,6 @@ class PhysicsSystem : ISystem
 
         // Ensure that physics bodies are removed when their entities are removed
         ECSWorld.SubscribeComponentRemoved<PhysicsBodyComponent>(OnComponentRemoved);
-        ECSWorld.SubscribeEntityDestroyed(OnEntityDestroyed);
     }
 
     private void OnComponentRemoved(
@@ -34,14 +35,6 @@ class PhysicsSystem : ISystem
     )
     {
         PhysicsWorld.Remove(physicsBody.PhysicsBody);
-    }
-
-    private void OnEntityDestroyed(in Arch.Core.Entity entity)
-    {
-        if (entity.Has<PhysicsBodyComponent>())
-        {
-            PhysicsWorld.Remove(entity.Get<PhysicsBodyComponent>().PhysicsBody);
-        }
     }
 
     private struct CreatePhysicsBody : IForEach
@@ -61,6 +54,11 @@ class PhysicsSystem : ISystem
             sensor.IsSensor = true;
             sensor.OnCollision += (fixtureA, fixtureB, contact) =>
             {
+                if (fixtureB.Body.Tag == particleTag)
+                {
+                    return false;
+                }
+
                 onCollision();
                 return true;
             };
@@ -115,6 +113,11 @@ class PhysicsSystem : ISystem
             bottomSensor.IsSensor = true;
             bottomSensor.OnCollision += (fixtureA, fixtureB, contact) =>
             {
+                if (fixtureB.Body.Tag == particleTag)
+                {
+                    return false;
+                }
+
                 var component = entity.Get<PhysicsBodyComponent>();
                 component.BottomCollisionCount++;
 
@@ -132,6 +135,16 @@ class PhysicsSystem : ISystem
             Body createdBody = null;
             if (entity.Has<ParticleComponent, PositionComponent>())
             {
+                bool onParticleCollide(Fixture fixtureA, Fixture fixtureB, Contact contact)
+                {
+                    var particle = entity.Get<ParticleComponent>();
+                    if (particle.Collide)
+                    {
+                        return true;
+                    }
+                    return (fixtureA.Body.BodyType == BodyType.Static)
+                        || (fixtureB.Body.BodyType == BodyType.Static);
+                }
                 var particle = entity.Get<ParticleComponent>();
                 var position = entity.Get<PositionComponent>();
                 createdBody = PhysicsWorld.CreateCircle(
@@ -140,7 +153,9 @@ class PhysicsSystem : ISystem
                     Convert.PixelsToMeters(new Vector2(position.Position.X, position.Position.Y)),
                     bodyType: BodyType.Dynamic
                 );
-                createdBody.IsBullet = true;
+                createdBody.Tag = particleTag;
+                createdBody.OnCollision += onParticleCollide;
+                createdBody.IgnoreGravity = !particle.Gravity;
                 createdBody.LinearVelocity = position.Velocity;
             }
             if (entity.Has<CirclePhysicsBodyComponent>())

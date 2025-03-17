@@ -1,8 +1,14 @@
-Microsoft Visual Studio Solution File, Format Version 12.00
+﻿Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.5.2.0
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FallingSand", "FallingSand/FallingSand.csproj", "{37CCC3E9-F417-8042-3F4D-5C0D8018A7AD}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FallingSand", "FallingSand\FallingSand.csproj", "{37CCC3E9-F417-8042-3F4D-5C0D8018A7AD}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Arch", "Arch", "{72183DDA-92C6-497D-A6AF-3E21482E85E5}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{89F6BF67-4095-4A70-9CE4-10527EB4F746}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Arch", "Arch\src\Arch\Arch.csproj", "{FCCBB5A1-B23A-4B37-954E-186D4C1028F7}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -14,11 +20,19 @@ Global
 		{37CCC3E9-F417-8042-3F4D-5C0D8018A7AD}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{37CCC3E9-F417-8042-3F4D-5C0D8018A7AD}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{37CCC3E9-F417-8042-3F4D-5C0D8018A7AD}.Release|Any CPU.Build.0 = Release|Any CPU
+		{FCCBB5A1-B23A-4B37-954E-186D4C1028F7}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{FCCBB5A1-B23A-4B37-954E-186D4C1028F7}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{FCCBB5A1-B23A-4B37-954E-186D4C1028F7}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{FCCBB5A1-B23A-4B37-954E-186D4C1028F7}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {C8ED593C-BF34-4735-A235-EF24D09DCD26}
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{89F6BF67-4095-4A70-9CE4-10527EB4F746} = {72183DDA-92C6-497D-A6AF-3E21482E85E5}
+		{FCCBB5A1-B23A-4B37-954E-186D4C1028F7} = {89F6BF67-4095-4A70-9CE4-10527EB4F746}
 	EndGlobalSection
 EndGlobal

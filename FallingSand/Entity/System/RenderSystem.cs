@@ -66,7 +66,25 @@ class RenderSystem : ISystem
                 ref PositionComponent position
             ) =>
             {
-                spriteBatch.Draw(pixelTexture, position.Position, null, particle.Color);
+                var color = particle.Color;
+                if (particle.Fade && entity.Has<LifetimeComponent>())
+                {
+                    var lifetime = entity.Get<LifetimeComponent>();
+                    var deathTime = lifetime.CreatedTime + lifetime.LifeTime;
+                    var currentTime = gameTime.TotalGameTime.TotalMilliseconds;
+                    var fade = (float)(deathTime - currentTime) / lifetime.LifeTime;
+                    color *= fade;
+                }
+                spriteBatch.Draw(
+                    texture: pixelTexture,
+                    destinationRectangle: new Rectangle(
+                        (int)position.Position.X,
+                        (int)position.Position.Y,
+                        1,
+                        1
+                    ),
+                    color: color
+                );
             }
         );
         spriteBatch.End();

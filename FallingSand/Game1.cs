@@ -192,7 +192,7 @@ public class Game1 : Game
 
         systemManager.Draw(gameTime);
 
-        physicsDebugView.RenderDebugData(Camera.GetProjectionMatrix(), Camera.GetViewMatrix());
+        // physicsDebugView.RenderDebugData(Camera.GetProjectionMatrix(), Camera.GetViewMatrix());
 
         // _spriteBatch.Begin();
         // FrameCounter.DrawFps(_spriteBatch, spriteFont, new Vector2(5, 5), Color.Yellow);
