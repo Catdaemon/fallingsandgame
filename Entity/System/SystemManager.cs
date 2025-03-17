@@ -25,7 +25,8 @@ class SystemManager
 
     public void RegisterSystems(
         PhysicsWorld physicsWorld,
-        FallingSandWorld.FallingSandWorld sandWorld
+        FallingSandWorld.FallingSandWorld sandWorld,
+        GraphicsDevice graphicsDevice
     )
     {
         AddSystem(new InputSystem(World));
@@ -36,7 +37,8 @@ class SystemManager
         AddSystem(new KinematicMovementSystem(World));
         AddSystem(new CameraSystem(World));
         AddSystem(new SandInteractionSystemSystem(World, sandWorld));
-        AddSystem(new RenderSystem(World));
+        AddSystem(new LifetimeSystem(World));
+        AddSystem(new RenderSystem(World, graphicsDevice));
 
         foreach (var system in Systems)
         {

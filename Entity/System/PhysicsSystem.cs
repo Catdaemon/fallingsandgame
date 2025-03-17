@@ -25,6 +25,7 @@ class PhysicsSystem : ISystem
 
         // Ensure that physics bodies are removed when their entities are removed
         ECSWorld.SubscribeComponentRemoved<PhysicsBodyComponent>(OnComponentRemoved);
+        ECSWorld.SubscribeEntityDestroyed(OnEntityDestroyed);
     }
 
     private void OnComponentRemoved(
@@ -33,6 +34,14 @@ class PhysicsSystem : ISystem
     )
     {
         PhysicsWorld.Remove(physicsBody.PhysicsBody);
+    }
+
+    private void OnEntityDestroyed(in Arch.Core.Entity entity)
+    {
+        if (entity.Has<PhysicsBodyComponent>())
+        {
+            PhysicsWorld.Remove(entity.Get<PhysicsBodyComponent>().PhysicsBody);
+        }
     }
 
     private struct CreatePhysicsBody : IForEach
@@ -121,6 +130,19 @@ class PhysicsSystem : ISystem
         public readonly void Update(Arch.Core.Entity entity)
         {
             Body createdBody = null;
+            if (entity.Has<ParticleComponent, PositionComponent>())
+            {
+                var particle = entity.Get<ParticleComponent>();
+                var position = entity.Get<PositionComponent>();
+                createdBody = PhysicsWorld.CreateCircle(
+                    Convert.PixelsToMeters(particle.Size),
+                    density: 0,
+                    Convert.PixelsToMeters(new Vector2(position.Position.X, position.Position.Y)),
+                    bodyType: BodyType.Dynamic
+                );
+                createdBody.IsBullet = true;
+                createdBody.LinearVelocity = position.Velocity;
+            }
             if (entity.Has<CirclePhysicsBodyComponent>())
             {
                 var circle = entity.Get<CirclePhysicsBodyComponent>();
@@ -184,7 +206,8 @@ class PhysicsSystem : ISystem
         .WithAny<
             CirclePhysicsBodyComponent,
             RectanglePhysicsBodyComponent,
-            CapsulePhysicsBodyComponent
+            CapsulePhysicsBodyComponent,
+            ParticleComponent
         >()
         .WithNone<PhysicsBodyComponent>();
 

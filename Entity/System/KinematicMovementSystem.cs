@@ -239,6 +239,20 @@ class KinematicMovementSystem : ISystem
                         {
                             jetpack.Fuel -= 0.1f;
                             yVelocity -= 0.005f;
+
+                            // Spawn a particle
+                            World.Create(
+                                new PositionComponent()
+                                {
+                                    Position = Convert.MetersToPixels(physicsBodyRef.Position),
+                                    Velocity = new Vector2(0, -0.1f),
+                                },
+                                new ParticleComponent() { Color = Color.Black, Size = 8 },
+                                new LifetimeComponent(
+                                    1000,
+                                    (int)gameTime.TotalGameTime.TotalMilliseconds
+                                )
+                            );
                         }
                     }
                     if (isGrounded)

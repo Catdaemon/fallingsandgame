@@ -62,7 +62,7 @@ public class Game1 : Game
             new WorldPosition(worldSizeX, worldSizeY)
         );
 
-        systemManager.RegisterSystems(physicsWorld, sandWorld);
+        systemManager.RegisterSystems(physicsWorld, sandWorld, GraphicsDevice);
 
         base.Initialize();
     }

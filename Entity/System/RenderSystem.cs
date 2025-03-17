@@ -13,10 +13,13 @@ class RenderSystem : ISystem
 {
     private readonly World World;
     private SpriteBatch spriteBatch;
+    private Texture2D pixelTexture;
 
-    public RenderSystem(World world)
+    public RenderSystem(World world, GraphicsDevice graphicsDevice)
     {
         World = world;
+        pixelTexture = new Texture2D(graphicsDevice, 1, 1);
+        pixelTexture.SetData([Color.White]);
     }
 
     public void InitializeGraphics(GraphicsDevice graphicsDevice)
@@ -48,6 +51,22 @@ class RenderSystem : ISystem
             {
                 var flip = position.FacingDirection.X < 0;
                 sprite.Animation.Draw(spriteBatch, position.Position, sprite.DestinationSize, flip);
+            }
+        );
+        // Draw particles
+        var withParticleQuery = new QueryDescription().WithAll<
+            ParticleComponent,
+            PositionComponent
+        >();
+        World.Query(
+            in withParticleQuery,
+            (
+                Arch.Core.Entity entity,
+                ref ParticleComponent particle,
+                ref PositionComponent position
+            ) =>
+            {
+                spriteBatch.Draw(pixelTexture, position.Position, null, particle.Color);
             }
         );
         spriteBatch.End();
