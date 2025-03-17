@@ -1,295 +1,226 @@
-using System;
 using System.Collections.Generic;
-using System.Linq;
-using FallingSand;
 using Microsoft.Xna.Framework;
 using nkast.Aether.Physics2D.Common;
-using nkast.Aether.Physics2D.Common.ConvexHull;
-using nkast.Aether.Physics2D.Common.Decomposition;
 using nkast.Aether.Physics2D.Common.PolygonManipulation;
 
 namespace FallingSandWorld;
 
 static class PixelsToPolygons
 {
-    public const int Empty = 0;
-    public const int Solid = 1;
-
-    // Minimum area to be considered a valid polygon
-    private const float MinPolygonArea = 4.0f;
-
-    // Maximum number of polygons to prevent performance issues
-    private const int MaxPolygons = 20;
-
-    // Maximum vertices per polygon - physics engines prefer simpler polygons
-    private const int MaxVerticesPerPolygon = 8;
-
-    // Reduction tolerance for polygon simplification
-    private const float SimplificationTolerance = 1.0f;
-
-    // The four neighbor directions (up, right, down, left)
-    private static readonly int[] DX = { 0, 1, 0, -1 };
-    private static readonly int[] DY = { -1, 0, 1, 0 };
-
-    public static IEnumerable<Vertices> Generate(int[,] grid)
+    public static IEnumerable<Vertices> Generate(ref bool[,] binaryGrid, int width, int height)
     {
-        int width = grid.GetLength(0);
-        int height = grid.GetLength(1);
+        // Run marching squares to get contours
+        List<List<Vector2>> contours = MarchingSquares(binaryGrid, width, height);
 
-        // Create a lower resolution grid to reduce complexity
-        int[,] downsampledGrid = DownsampleGrid(grid, width, height, 3);
-        int downsampledWidth = downsampledGrid.GetLength(0);
-        int downsampledHeight = downsampledGrid.GetLength(1);
-
-        // Track visited cells
-        bool[,] visited = new bool[downsampledWidth, downsampledHeight];
-
-        // List of connected solid regions
-        List<List<Point>> solidRegions = new List<List<Point>>();
-
-        // Find all connected solid regions in the downsampled grid
-        for (int y = 0; y < downsampledHeight; y++)
+        // Convert contours to Vertices objects
+        List<Vertices> polygons = [];
+        foreach (var contour in contours)
         {
-            for (int x = 0; x < downsampledWidth; x++)
+            if (contour.Count >= 3) // Need at least 3 vertices to form a polygon
             {
-                // Skip if already visited or not solid
-                if (visited[x, y] || downsampledGrid[x, y] == Empty)
+                Vertices vertices = [.. contour];
+
+                // Ensure the vertices are in counter-clockwise order for physics
+                if (!vertices.IsCounterClockWise())
+                {
+                    vertices.Reverse();
+                }
+
+                // Simplify the polygon to reduce vertex count
+                vertices = SimplifyTools.ReduceByDistance(vertices, 0.5f);
+
+                // Add valid polygon to result
+                if (vertices.Count >= 3)
+                {
+                    polygons.Add(vertices);
+                }
+            }
+        }
+
+        return polygons;
+    }
+
+    private static List<List<Vector2>> MarchingSquares(bool[,] grid, int width, int height)
+    {
+        // Maps edges indices (encoded as x1,y1,x2,y2) to the contours they belong to
+        Dictionary<string, int> edgeToContourMap = [];
+        List<List<Vector2>> contours = [];
+
+        // Process each cell (2x2 grid of pixels)
+        for (int y = 0; y < height - 1; y++)
+        {
+            for (int x = 0; x < width - 1; x++)
+            {
+                // Get the 4 corners of the current cell
+                bool topLeft = grid[x, y];
+                bool topRight = grid[x + 1, y];
+                bool bottomRight = grid[x + 1, y + 1];
+                bool bottomLeft = grid[x, y + 1];
+
+                // Determine the case (0-15) based on which corners are solid
+                int caseIndex = 0;
+                if (topLeft)
+                    caseIndex |= 1;
+                if (topRight)
+                    caseIndex |= 2;
+                if (bottomRight)
+                    caseIndex |= 4;
+                if (bottomLeft)
+                    caseIndex |= 8;
+
+                // Skip empty or full cells
+                if (caseIndex == 0 || caseIndex == 15)
                     continue;
 
-                // Found a new solid pixel, do a flood fill to find all connected solid pixels
-                List<Point> region = new List<Point>();
-                FloodFill(
-                    downsampledGrid,
-                    visited,
-                    x,
-                    y,
-                    downsampledWidth,
-                    downsampledHeight,
-                    region
-                );
+                // Generate edges based on the case
+                List<Edge> edges = GetEdgesForCase(caseIndex, x, y);
 
-                // Only add regions with more than 1 pixel (discard single pixels)
-                if (region.Count > 1)
+                foreach (var edge in edges)
                 {
-                    solidRegions.Add(region);
+                    // Create a unique key for this edge
+                    string edgeKey = GetEdgeKey(edge.Start, edge.End);
+
+                    if (edgeToContourMap.TryGetValue(edgeKey, out int contourIndex))
+                    {
+                        // This edge already exists in a contour, remove it (handles internal edges)
+                        edgeToContourMap.Remove(edgeKey);
+                    }
+                    else
+                    {
+                        // Add this edge to a new or existing contour
+                        contourIndex = AddEdgeToContours(contours, edge);
+                        edgeToContourMap[edgeKey] = contourIndex;
+                    }
                 }
             }
         }
 
-        // Generate polygons from solid regions
-        List<Vertices> allPolygons = new List<Vertices>();
-
-        // Process regions in order of size (largest first)
-        foreach (var region in solidRegions.OrderByDescending(r => r.Count))
+        // Clean up and close any open contours
+        for (int i = 0; i < contours.Count; i++)
         {
-            Vertices rawPolygon = CreatePolygonFromRegion(region);
-
-            if (rawPolygon == null || rawPolygon.Count < 3)
-                continue;
-
-            // First simplify to remove unnecessary vertices
-            Vertices simplified = AggressivelySimplifyPolygon(rawPolygon);
-
-            if (simplified.Count < 3)
-                continue;
-
-            // Scale back to original resolution
-            for (int i = 0; i < simplified.Count; i++)
+            if (
+                contours[i].Count > 0
+                && !Equals(contours[i][0], contours[i][contours[i].Count - 1])
+            )
             {
-                simplified[i] = simplified[i] * 3; // Multiply by our downsampling factor
+                contours[i].Add(contours[i][0]); // Close the loop
             }
+        }
 
-            // If polygon is still too complex, decompose it
-            if (simplified.Count > MaxVerticesPerPolygon)
+        return contours;
+    }
+
+    private static string GetEdgeKey(Vector2 p1, Vector2 p2)
+    {
+        // Create a consistent key regardless of direction
+        return Equals(p1, p2) ? $"{p1.X},{p1.Y}"
+            : (p1.X < p2.X || (p1.X == p2.X && p1.Y < p2.Y)) ? $"{p1.X},{p1.Y},{p2.X},{p2.Y}"
+            : $"{p2.X},{p2.Y},{p1.X},{p1.Y}";
+    }
+
+    private static int AddEdgeToContours(List<List<Vector2>> contours, Edge edge)
+    {
+        // Try to add to existing contour
+        for (int i = 0; i < contours.Count; i++)
+        {
+            var contour = contours[i];
+            if (contour.Count > 0)
             {
-                // Use Bayazit decomposition to create smaller convex polygons
-                var decomposed = Triangulate.ConvexPartition(
-                    simplified,
-                    TriangulationAlgorithm.Bayazit
-                );
+                Vector2 start = contour[0];
+                Vector2 end = contour[contour.Count - 1];
 
-                foreach (var poly in decomposed)
+                if (Equals(edge.Start, end))
                 {
-                    if (poly.Count >= 3 && Math.Abs(poly.GetArea()) >= MinPolygonArea)
-                    {
-                        allPolygons.Add(poly);
-
-                        // Check if we've reached the maximum polygon count
-                        if (allPolygons.Count >= MaxPolygons)
-                            break;
-                    }
+                    contour.Add(edge.End);
+                    return i;
+                }
+                else if (Equals(edge.End, start))
+                {
+                    contour.Insert(0, edge.Start);
+                    return i;
                 }
             }
-            else
-            {
-                // Polygon is already simple enough
-                if (Math.Abs(simplified.GetArea()) >= MinPolygonArea)
-                {
-                    allPolygons.Add(simplified);
-                }
-            }
+        }
 
-            // Check if we've reached the maximum polygon count
-            if (allPolygons.Count >= MaxPolygons)
+        // Start new contour
+        var newContour = new List<Vector2> { edge.Start, edge.End };
+        contours.Add(newContour);
+        return contours.Count - 1;
+    }
+
+    private static List<Edge> GetEdgesForCase(int caseIndex, int x, int y)
+    {
+        List<Edge> edges = [];
+        float cellSize = 1.0f;
+
+        // The midpoints of the cell edges
+        Vector2 top = new Vector2(x + 0.5f, y) * cellSize;
+        Vector2 right = new Vector2(x + 1, y + 0.5f) * cellSize;
+        Vector2 bottom = new Vector2(x + 0.5f, y + 1) * cellSize;
+        Vector2 left = new Vector2(x, y + 0.5f) * cellSize;
+
+        // Determine the edges based on the case
+        switch (caseIndex)
+        {
+            case 1: // TopLeft
+                edges.Add(new Edge(left, top));
                 break;
+            case 2: // TopRight
+                edges.Add(new Edge(top, right));
+                break;
+            case 3: // TopLeft + TopRight
+                edges.Add(new Edge(left, right));
+                break;
+            case 4: // BottomRight
+                edges.Add(new Edge(right, bottom));
+                break;
+            case 5: // TopLeft + BottomRight (saddle point)
+                edges.Add(new Edge(left, top));
+                edges.Add(new Edge(right, bottom));
+                break;
+            case 6: // TopRight + BottomRight
+                edges.Add(new Edge(top, bottom));
+                break;
+            case 7: // TopLeft + TopRight + BottomRight
+                edges.Add(new Edge(left, bottom));
+                break;
+            case 8: // BottomLeft
+                edges.Add(new Edge(bottom, left));
+                break;
+            case 9: // TopLeft + BottomLeft
+                edges.Add(new Edge(top, bottom));
+                break;
+            case 10: // TopRight + BottomLeft (saddle point)
+                edges.Add(new Edge(top, right));
+                edges.Add(new Edge(bottom, left));
+                break;
+            case 11: // TopLeft + TopRight + BottomLeft
+                edges.Add(new Edge(right, bottom));
+                break;
+            case 12: // BottomRight + BottomLeft
+                edges.Add(new Edge(right, left));
+                break;
+            case 13: // TopLeft + BottomRight + BottomLeft
+                edges.Add(new Edge(top, right));
+                break;
+            case 14: // TopRight + BottomRight + BottomLeft
+                edges.Add(new Edge(top, left));
+                break;
+            // Case 0 and 15 are skipped (all empty or all filled)
         }
 
-        return allPolygons;
+        return edges;
     }
 
-    private static int[,] DownsampleGrid(int[,] grid, int width, int height, int factor)
+    private struct Edge
     {
-        int newWidth = width / factor;
-        int newHeight = height / factor;
+        public Vector2 Start;
+        public Vector2 End;
 
-        // Ensure we have at least 1 cell in each dimension
-        newWidth = Math.Max(1, newWidth);
-        newHeight = Math.Max(1, newHeight);
-
-        int[,] result = new int[newWidth, newHeight];
-
-        for (int y = 0; y < newHeight; y++)
+        public Edge(Vector2 start, Vector2 end)
         {
-            for (int x = 0; x < newWidth; x++)
-            {
-                // A cell in the downsampled grid is solid if any original cell is solid
-                bool anySolid = false;
-
-                for (int dy = 0; dy < factor && (y * factor + dy) < height; dy++)
-                {
-                    for (int dx = 0; dx < factor && (x * factor + dx) < width; dx++)
-                    {
-                        if (grid[x * factor + dx, y * factor + dy] == Solid)
-                        {
-                            anySolid = true;
-                            break;
-                        }
-                    }
-                    if (anySolid)
-                        break;
-                }
-
-                result[x, y] = anySolid ? Solid : Empty;
-            }
-        }
-
-        return result;
-    }
-
-    private static void FloodFill(
-        int[,] grid,
-        bool[,] visited,
-        int startX,
-        int startY,
-        int width,
-        int height,
-        List<Point> region
-    )
-    {
-        // Use a queue for breadth-first traversal
-        Queue<Point> queue = new Queue<Point>();
-        queue.Enqueue(new Point(startX, startY));
-        visited[startX, startY] = true;
-        region.Add(new Point(startX, startY));
-
-        while (queue.Count > 0)
-        {
-            Point current = queue.Dequeue();
-
-            // Check all 4 neighbors
-            for (int i = 0; i < 4; i++)
-            {
-                int nx = current.X + DX[i];
-                int ny = current.Y + DY[i];
-
-                // Check bounds and if it's solid and unvisited
-                if (
-                    nx >= 0
-                    && nx < width
-                    && ny >= 0
-                    && ny < height
-                    && grid[nx, ny] == Solid
-                    && !visited[nx, ny]
-                )
-                {
-                    visited[nx, ny] = true;
-                    queue.Enqueue(new Point(nx, ny));
-                    region.Add(new Point(nx, ny));
-                }
-            }
-        }
-    }
-
-    private static Vertices CreatePolygonFromRegion(List<Point> region)
-    {
-        try
-        {
-            // Use the convex hull algorithm from the physics library
-            Vertices polygon = new Vertices();
-
-            // Add all points to the vertices list
-            foreach (var point in region)
-            {
-                polygon.Add(new Vector2(point.X, point.Y));
-            }
-
-            // Create a convex hull of the region
-            return GiftWrap.GetConvexHull(polygon);
-        }
-        catch (Exception)
-        {
-            // Fallback to simpler method if gift wrapping fails
-            return CreateSimpleRectangleFromRegion(region);
-        }
-    }
-
-    private static Vertices CreateSimpleRectangleFromRegion(List<Point> region)
-    {
-        // Create a simple rectangular polygon based on region bounds
-        int minX = region.Min(p => p.X);
-        int minY = region.Min(p => p.Y);
-        int maxX = region.Max(p => p.X);
-        int maxY = region.Max(p => p.Y);
-
-        Vertices rectangle = new Vertices(4);
-        rectangle.Add(new Vector2(minX, minY));
-        rectangle.Add(new Vector2(maxX, minY));
-        rectangle.Add(new Vector2(maxX, maxY));
-        rectangle.Add(new Vector2(minX, maxY));
-
-        return rectangle;
-    }
-
-    private static Vertices AggressivelySimplifyPolygon(Vertices vertices)
-    {
-        if (vertices == null || vertices.Count <= 3)
-            return vertices;
-
-        try
-        {
-            // Apply multiple simplification techniques
-            Vertices simplified = SimplifyTools.CollinearSimplify(vertices);
-            simplified = SimplifyTools.DouglasPeuckerSimplify(simplified, SimplificationTolerance);
-            simplified = SimplifyTools.ReduceByDistance(simplified, SimplificationTolerance);
-
-            // If still too complex, use more aggressive simplification
-            if (simplified.Count > MaxVerticesPerPolygon)
-            {
-                float tolerance = SimplificationTolerance;
-                while (simplified.Count > MaxVerticesPerPolygon && tolerance < 5.0f)
-                {
-                    tolerance += 0.5f;
-                    simplified = SimplifyTools.DouglasPeuckerSimplify(vertices, tolerance);
-                    if (simplified.Count < 3)
-                        return vertices; // Don't over-simplify
-                }
-            }
-
-            return simplified.Count >= 3 ? simplified : vertices;
-        }
-        catch
-        {
-            return vertices;
+            Start = start;
+            End = end;
         }
     }
 }
