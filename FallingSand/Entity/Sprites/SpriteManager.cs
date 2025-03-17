@@ -21,6 +21,12 @@ static class SpriteManager
         playerAnimations.Add("Run", 0, 4, 8, true);
         playerAnimations.Add("Jump", 6, 3, 5, false);
         spriteAnimations["Player"] = playerAnimations;
+
+        var chestSpriteSheet = LoadSpriteSheet("Sprites/Chest", 2, 5, 2);
+        var chestAnimations = new SpriteAnimations(chestSpriteSheet);
+        chestAnimations.Add("Idle", 0, 0, 5, true);
+        chestAnimations.Add("Open", 1, 0, 3, false);
+        spriteAnimations["Chest"] = chestAnimations;
     }
 
     public static SpriteSheet LoadSpriteSheet(string name, int rows, int columns, int frameRate)

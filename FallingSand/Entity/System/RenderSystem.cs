@@ -50,7 +50,13 @@ class RenderSystem : ISystem
             (Arch.Core.Entity entity, ref SpriteComponent sprite, ref PositionComponent position) =>
             {
                 var flip = position.FacingDirection.X < 0;
-                sprite.Animation.Draw(spriteBatch, position.Position, sprite.DestinationSize, flip);
+                sprite.Animation.Draw(
+                    spriteBatch,
+                    position.Position,
+                    position.Angle,
+                    sprite.DestinationSize,
+                    flip
+                );
             }
         );
         // Draw particles

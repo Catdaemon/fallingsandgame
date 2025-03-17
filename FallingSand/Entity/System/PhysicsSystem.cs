@@ -269,6 +269,7 @@ class PhysicsSystem : ISystem
                     positionComponent.Velocity = Convert.MetersToPixels(
                         physicsBody.PhysicsBody.LinearVelocity
                     );
+                    positionComponent.Angle = physicsBody.PhysicsBody.Rotation;
                     // Update the facing direction if we are moving
                     if (Math.Abs(positionComponent.Velocity.X) > 1f)
                     {

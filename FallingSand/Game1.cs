@@ -5,6 +5,7 @@ using Arch.Core;
 using FallingSand.Entity.Component;
 using FallingSand.Entity.Sprites;
 using FallingSand.Entity.System;
+using FallingSand.FallingSandRenderer;
 using FallingSandWorld;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
@@ -18,11 +19,11 @@ public class Game1 : Game
 {
     private readonly MgFrameRate FrameCounter = new();
 
-    private GraphicsDeviceManager graphics;
+    private readonly GraphicsDeviceManager graphics;
     private SpriteBatch _spriteBatch;
     private SpriteFont spriteFont;
 
-    private readonly FallingSandRenderer.GameWorld gameWorld;
+    private readonly GameWorld gameWorld;
     private FallingSandWorld.FallingSandWorld sandWorld;
     private readonly int worldSizeX = 1024;
     private readonly int worldSizeY = 768;
@@ -84,26 +85,8 @@ public class Game1 : Game
 
         base.LoadContent();
 
-        // Create the player
-        var player = ecsWorld.Create(
-            new PositionComponent(),
-            new BoundingBoxComponent(),
-            new HealthComponent() { Current = 100, Max = 100 },
-            new InputReceiverComponent(),
-            new InputStateComponent(),
-            new CameraFollowComponent(),
-            // new CirclePhysicsBodyComponent(8, 8, new WorldPosition(100, 100)),
-            new CapsulePhysicsBodyComponent()
-            {
-                Height = 16,
-                Width = 8,
-                InitialPosition = new WorldPosition(100, 100),
-                CreateSensors = true,
-            },
-            new SandPixelReaderComponent(),
-            new JetpackComponent(100),
-            new SpriteComponent("Player", "Idle", new Rectangle(0, 0, 16, 16))
-        );
+        ecsWorld.CreatePlayer(new WorldPosition(100, -100));
+        ecsWorld.CreateChest(new WorldPosition(200, -100));
     }
 
     protected override void Update(GameTime gameTime)

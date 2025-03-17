@@ -63,8 +63,10 @@ class SpriteSheetAnimation
     public void Draw(
         SpriteBatch spriteBatch,
         Vector2 position,
+        float rotation,
         Rectangle destinationSize,
-        bool flipped = false
+        bool flipped = false,
+        Color? tint = null
     )
     {
         // Calculate the current frame position with wrapping
@@ -86,8 +88,8 @@ class SpriteSheetAnimation
             SpriteSheet.Texture,
             position,
             sourceRectangle,
-            Color.White,
-            0f,
+            tint ?? Color.White,
+            rotation,
             new Vector2(SpriteSheet.FrameWidth / 2, SpriteSheet.FrameHeight / 2),
             new Vector2(
                 (float)destinationSize.Width / SpriteSheet.FrameWidth,
