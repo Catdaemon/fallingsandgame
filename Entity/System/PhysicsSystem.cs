@@ -66,7 +66,7 @@ class PhysicsSystem : ISystem
             var bodyWidth = Util.GetPhysicsBodyWidth(body);
             var bodyHeight = Util.GetPhysicsBodyHeight(body);
 
-            var sensorDistance = 0.05f;
+            var sensorDistance = 0.0f;
             var sensorScale = 0.5f;
 
             // Create sensors for each side of the body
@@ -108,23 +108,6 @@ class PhysicsSystem : ISystem
             {
                 var component = entity.Get<PhysicsBodyComponent>();
                 component.BottomCollisionCount++;
-
-                // Get the normal from the contact
-                Vector2 normal = contact.Manifold.LocalNormal;
-
-                // Convert if necessary based on which fixture belongs to our entity
-                if (contact.FixtureB.Body == body)
-                {
-                    normal = -normal; // Flip the normal if our body is fixture B
-                }
-
-                // Only use this normal if it's pointing somewhat upward
-                if (normal.Y < 0)
-                {
-                    // Normalize the vector to ensure it's a unit vector
-                    normal.Normalize();
-                    component.GroundNormal = normal;
-                }
 
                 return true;
             };

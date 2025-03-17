@@ -10,7 +10,7 @@ static class Camera
     private static Vector2 PositionF = new Vector2(0, 0);
     private static Vector2 MouseScreenPosition = new Vector2(0, 0);
     private static WorldPosition Size = new WorldPosition(0, 0);
-    private static float Zoom = 1.0f;
+    private static float Zoom = 2.0f;
 
     // Store current GameTime for animation purposes
     public static GameTime GameTime { get; private set; }

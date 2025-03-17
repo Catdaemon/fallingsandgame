@@ -24,8 +24,8 @@ public class Game1 : Game
 
     private readonly FallingSandRenderer.GameWorld gameWorld;
     private FallingSandWorld.FallingSandWorld sandWorld;
-    private readonly int worldSizeX = 800;
-    private readonly int worldSizeY = 600;
+    private readonly int worldSizeX = 1024;
+    private readonly int worldSizeY = 768;
 
     private Material paintMaterial = Material.Sand;
     private Color paintColor = new(255, 255, 0);
@@ -38,6 +38,12 @@ public class Game1 : Game
     public Game1()
     {
         graphics = new(this);
+        graphics.PreferredBackBufferHeight = worldSizeY;
+        graphics.PreferredBackBufferWidth = worldSizeX;
+        graphics.SynchronizeWithVerticalRetrace = false;
+        // no fixed time
+        IsFixedTimeStep = false;
+
         Content.RootDirectory = "Content";
         IsMouseVisible = true;
         gameWorld = new FallingSandRenderer.GameWorld();

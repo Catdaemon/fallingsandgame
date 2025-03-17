@@ -14,7 +14,6 @@ record PhysicsBodyComponent
     public int TopCollisionCount { get; set; }
     public bool IsCollidingTop => TopCollisionCount > 0;
 
-    public Vector2 GroundNormal { get; set; } = Vector2.UnitY; // Default to straight up
-
+    public double LeftGroundTime { get; set; } = 0;
     public Body PhysicsBody { get; set; }
 }
