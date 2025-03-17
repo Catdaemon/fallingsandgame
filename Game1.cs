@@ -37,10 +37,12 @@ public class Game1 : Game
 
     public Game1()
     {
-        graphics = new(this);
-        graphics.PreferredBackBufferHeight = worldSizeY;
-        graphics.PreferredBackBufferWidth = worldSizeX;
-        graphics.SynchronizeWithVerticalRetrace = false;
+        graphics = new(this)
+        {
+            PreferredBackBufferHeight = worldSizeY,
+            PreferredBackBufferWidth = worldSizeX,
+            SynchronizeWithVerticalRetrace = false,
+        };
         // no fixed time
         IsFixedTimeStep = false;
 
@@ -99,6 +101,7 @@ public class Game1 : Game
                 CreateSensors = true,
             },
             new SandPixelReaderComponent(),
+            new JetpackComponent(100),
             new SpriteComponent("Player", "Idle", new Rectangle(0, 0, 16, 16))
         );
     }

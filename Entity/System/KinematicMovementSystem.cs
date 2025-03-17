@@ -1,4 +1,5 @@
 using System;
+using System.Runtime.CompilerServices;
 using Arch.Core;
 using Arch.Core.Extensions;
 using FallingSand.Entity.Component;
@@ -225,6 +226,25 @@ class KinematicMovementSystem : ISystem
                         }
                     }
                     // Keep existing vertical velocity for air movement
+                }
+
+                // Jetpack logic
+                if (entity.Has<JetpackComponent>())
+                {
+                    var jetpack = entity.Get<JetpackComponent>();
+
+                    if (!isGrounded && !isSwimming)
+                    {
+                        if (inputState.Value.Jump && jetpack.Fuel > 0)
+                        {
+                            jetpack.Fuel -= 0.1f;
+                            yVelocity -= 0.005f;
+                        }
+                    }
+                    if (isGrounded)
+                    {
+                        jetpack.Refill();
+                    }
                 }
 
                 physicsBodyRef.LinearVelocity = new Vector2(xVelocity, yVelocity);
