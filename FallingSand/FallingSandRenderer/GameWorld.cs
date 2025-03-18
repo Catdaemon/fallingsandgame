@@ -113,7 +113,7 @@ class GameWorld
             if (!chunk.HasGeneratedMap)
             {
                 asyncChunkGenerator.Enqueue(chunk);
-                // break; // Only request one chunk per update
+                break; // Only request one chunk per update
             }
         }
     }
@@ -197,11 +197,28 @@ class GameWorld
 
         foreach (var (_, chunk) in visibleChunks)
         {
-            if (chunk.SandChunk == null || !chunk.SandChunk.isAwake)
+            // Don't update chunks that are not generated
+            if (chunk.SandChunk == null)
             {
                 continue;
             }
 
+            // Always process chunks that don't have physics bodies yet
+            if (!chunk.HasPhysicsBodies)
+            {
+                asyncChunkPhysicsCalculator.Enqueue(chunk);
+                chunk.CreatePhysicsBodies();
+
+                continue;
+            }
+
+            // Don't update chunks that are not awake
+            if (!chunk.SandChunk.isAwake)
+            {
+                continue;
+            }
+
+            // Don't update chunks that are currently calculating physics
             if (chunk.IsCalculatingPhysics)
             {
                 continue;

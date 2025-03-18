@@ -35,7 +35,8 @@ class GameChunk
     private float totalTime = 0f;
 
     // thread-safe list
-    private readonly ConcurrentBag<Body> PhysicsBodies = new();
+    private readonly ConcurrentBag<Body> PhysicsBodies = [];
+    public bool HasPhysicsBodies => !PhysicsBodies.IsEmpty;
     private readonly World PhysicsWorld;
     private readonly BasicEffect BasicEffect;
 
@@ -261,7 +262,7 @@ class GameChunk
             SpriteBatch.Begin(blendState: overwriteBlend);
 
             // Water pixels to draw after regular pixels
-            List<LocalPosition> waterPositions = [];
+            // List<LocalPosition> waterPositions = [];
 
             while (SandChunk.pixelsToDraw.TryTake(out var position) && renderedPixels < 1000)
             {
@@ -279,7 +280,7 @@ class GameChunk
                     if (pixelData.Material == Material.Water)
                     {
                         // Collect water pixels for later drawing with shader
-                        waterPositions.Add(position);
+                        // waterPositions.Add(position);
                     }
 
                     // TODO: should this be drawn?
@@ -297,37 +298,37 @@ class GameChunk
             SpriteBatch.End();
 
             // Now draw water pixels using shader
-            if (waterPositions.Count > 0 && waterShaderEffect != null)
-            {
-                // Set the water render target
-                GraphicsDevice.SetRenderTarget(waterRenderTarget);
-                GraphicsDevice.Clear(Color.Transparent);
+            // if (waterPositions.Count > 0 && waterShaderEffect != null)
+            // {
+            //     // Set the water render target
+            //     GraphicsDevice.SetRenderTarget(waterRenderTarget);
+            //     GraphicsDevice.Clear(Color.Transparent);
 
-                // Apply water shader
-                waterShaderEffect.Parameters["TotalTime"].SetValue(totalTime);
-                waterShaderEffect.Parameters["ScreenTexture"].SetValue(RenderTarget);
+            //     // Apply water shader
+            //     waterShaderEffect.Parameters["TotalTime"].SetValue(totalTime);
+            //     waterShaderEffect.Parameters["ScreenTexture"].SetValue(RenderTarget);
 
-                SpriteBatch.Begin(effect: waterShaderEffect);
+            //     SpriteBatch.Begin(effect: waterShaderEffect);
 
-                foreach (var position in waterPositions)
-                {
-                    var pixelData = SandChunk.GetPixel(position).Data;
-                    SpriteBatch.Draw(
-                        PixelTexture,
-                        new Rectangle(position.X, position.Y, 1, 1),
-                        pixelData.Color
-                    );
-                }
+            //     foreach (var position in waterPositions)
+            //     {
+            //         var pixelData = SandChunk.GetPixel(position).Data;
+            //         SpriteBatch.Draw(
+            //             PixelTexture,
+            //             new Rectangle(position.X, position.Y, 1, 1),
+            //             pixelData.Color
+            //         );
+            //     }
 
-                SpriteBatch.End();
+            //     SpriteBatch.End();
 
-                // Switch back to main render target and copy water pixels
-                GraphicsDevice.SetRenderTarget(RenderTarget);
+            //     // Switch back to main render target and copy water pixels
+            //     GraphicsDevice.SetRenderTarget(RenderTarget);
 
-                SpriteBatch.Begin(blendState: BlendState.AlphaBlend);
-                SpriteBatch.Draw(waterRenderTarget, Vector2.Zero, Color.White);
-                SpriteBatch.End();
-            }
+            //     SpriteBatch.Begin(blendState: BlendState.AlphaBlend);
+            //     SpriteBatch.Draw(waterRenderTarget, Vector2.Zero, Color.White);
+            //     SpriteBatch.End();
+            // }
         }
 
         GraphicsDevice.SetRenderTarget(null);
@@ -367,7 +368,7 @@ class GameChunk
     public void UpdatePhysicsPolygons()
     {
         // Generate a physics mesh for the chunk
-        if (!HasGeneratedMap || polysUpdated)
+        if (SandChunk == null || !HasGeneratedMap || polysUpdated)
         {
             IsCalculatingPhysics = false;
             return;
@@ -417,6 +418,7 @@ class GameChunk
         SandChunk = null;
 
         HasGeneratedMap = false;
+        IsCalculatingPhysics = false;
         WorldOrigin = new WorldPosition(0, 0);
     }
 }
