@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Microsoft.Xna.Framework;
 using nkast.Aether.Physics2D.Common;
@@ -5,222 +6,337 @@ using nkast.Aether.Physics2D.Common.PolygonManipulation;
 
 namespace FallingSandWorld;
 
-static class PixelsToPolygons
+// Changed from static class to instance-based class
+class PixelsToPolygons
 {
-    public static IEnumerable<Vertices> Generate(ref bool[,] binaryGrid, int width, int height)
+    // Debug counters - still static for convenience
+    public static int TotalPolygons { get; private set; }
+    public static int RejectedPolygons { get; private set; }
+    public static int BoxPolygons { get; private set; }
+    public static int MergedPolygons { get; private set; }
+
+    // Object pools now instance-based to support multiple threads
+    private readonly List<CellInfo> _cellInfoPool;
+    private readonly List<Rectangle> _rectanglePool;
+    private readonly List<Rectangle> _tempRectanglePool;
+    private readonly List<Vertices> _verticesPool;
+
+    // Thread local instance (singleton per thread)
+    [ThreadStatic]
+    private static PixelsToPolygons _threadInstance;
+
+    // Factory method to get thread-local instance
+    public static PixelsToPolygons GetInstance()
     {
-        // Run marching squares to get contours
-        List<List<Vector2>> contours = MarchingSquares(binaryGrid, width, height);
-
-        // Convert contours to Vertices objects
-        List<Vertices> polygons = [];
-        foreach (var contour in contours)
+        if (_threadInstance == null)
         {
-            if (contour.Count >= 3) // Need at least 3 vertices to form a polygon
+            _threadInstance = new PixelsToPolygons();
+        }
+        return _threadInstance;
+    }
+
+    // Private constructor to enforce factory usage
+    private PixelsToPolygons()
+    {
+        // Initialize pools with appropriate capacities
+        _cellInfoPool = new List<CellInfo>(1024);
+        _rectanglePool = new List<Rectangle>(256);
+        _tempRectanglePool = new List<Rectangle>(256);
+        _verticesPool = new List<Vertices>(256);
+    }
+
+    // Struct to represent a rectangle - using struct to avoid allocations
+    private struct Rectangle
+    {
+        public int X,
+            Y,
+            Width,
+            Height;
+
+        public Rectangle(int x, int y, int width, int height)
+        {
+            X = x;
+            Y = y;
+            Width = width;
+            Height = height;
+        }
+
+        // Check if this rectangle shares an edge with another
+        public bool SharesEdgeWith(Rectangle other)
+        {
+            // Check if rectangles share a horizontal edge
+            bool sharesHorizontalEdge =
+                (Y == other.Y + other.Height || other.Y == Y + Height)
+                && !(X >= other.X + other.Width || other.X >= X + Width);
+
+            // Check if rectangles share a vertical edge
+            bool sharesVerticalEdge =
+                (X == other.X + other.Width || other.X == X + Width)
+                && !(Y >= other.Y + other.Height || other.Y >= Y + Height);
+
+            return sharesHorizontalEdge || sharesVerticalEdge;
+        }
+
+        // Try to merge with another rectangle if they share an edge
+        public bool TryMerge(Rectangle other, out Rectangle merged)
+        {
+            merged = this;
+
+            // Calculate boundaries
+            int x1 = Math.Min(X, other.X);
+            int y1 = Math.Min(Y, other.Y);
+            int x2 = Math.Max(X + Width, other.X + other.Width);
+            int y2 = Math.Max(Y + Height, other.Y + other.Height);
+            int mergedWidth = x2 - x1;
+            int mergedHeight = y2 - y1;
+
+            // Check if merging would create a simple rectangle
+            int area1 = Width * Height;
+            int area2 = other.Width * other.Height;
+            int mergedArea = mergedWidth * mergedHeight;
+
+            if (mergedArea == area1 + area2 && SharesEdgeWith(other))
             {
-                Vertices vertices = [.. contour];
+                merged = new Rectangle(x1, y1, mergedWidth, mergedHeight);
+                return true;
+            }
 
-                // Ensure the vertices are in counter-clockwise order for physics
-                if (!vertices.IsCounterClockWise())
-                {
-                    vertices.Reverse();
-                }
+            return false;
+        }
+    }
 
-                // Simplify the polygon to reduce vertex count
-                vertices = SimplifyTools.ReduceByDistance(vertices, 0.5f);
+    // Struct to avoid allocating tuples
+    private struct CellInfo : IComparable<CellInfo>
+    {
+        public int X;
+        public int Y;
+        public int Priority;
 
-                // Add valid polygon to result
-                if (vertices.Count >= 3)
-                {
-                    polygons.Add(vertices);
-                }
+        public CellInfo(int x, int y, int priority)
+        {
+            X = x;
+            Y = y;
+            Priority = priority;
+        }
+
+        public int CompareTo(CellInfo other)
+        {
+            // Sort by priority in descending order
+            return other.Priority.CompareTo(Priority);
+        }
+    }
+
+    // Changed to instance method
+    public IEnumerable<Vertices> Generate(ref bool[,] binaryGrid, int width, int height)
+    {
+        // Reset counters
+        TotalPolygons = 0;
+        RejectedPolygons = 0;
+        BoxPolygons = 0;
+        MergedPolygons = 0;
+
+        // Clear object pools for reuse
+        _cellInfoPool.Clear();
+        _rectanglePool.Clear();
+        _tempRectanglePool.Clear();
+        _verticesPool.Clear();
+
+        // Find all maximal rectangles
+        FindMaximalRectangles(binaryGrid, width, height, _rectanglePool);
+
+        // Merge rectangles where possible to reduce the count
+        MergeRectangles(_rectanglePool, _tempRectanglePool);
+
+        // Convert rectangles to Vertices for the physics engine
+        foreach (var rect in _rectanglePool)
+        {
+            Vertices polygon = CreateRectangleVertices(rect.X, rect.Y, rect.Width, rect.Height);
+            _verticesPool.Add(polygon);
+            BoxPolygons++;
+            TotalPolygons++;
+        }
+
+        return _verticesPool;
+    }
+
+    /// <summary>
+    /// Find maximal rectangles in the binary grid using a more efficient algorithm
+    /// </summary>
+    private void FindMaximalRectangles(
+        bool[,] grid,
+        int width,
+        int height,
+        List<Rectangle> rectangles
+    )
+    {
+        // Reuse a single processed grid across calls
+        bool[,] processed = new bool[width, height];
+
+        // Reset the processed grid
+        for (int y = 0; y < height; y++)
+        {
+            for (int x = 0; x < width; x++)
+            {
+                processed[x, y] = false;
             }
         }
 
-        return polygons;
-    }
-
-    private static List<List<Vector2>> MarchingSquares(bool[,] grid, int width, int height)
-    {
-        // Maps edges indices (encoded as x1,y1,x2,y2) to the contours they belong to
-        Dictionary<string, int> edgeToContourMap = [];
-        List<List<Vector2>> contours = [];
-
-        // Process each cell (2x2 grid of pixels)
-        for (int y = 0; y < height - 1; y++)
+        // Calculate a heuristic value for each solid cell (potential area)
+        for (int y = 0; y < height; y++)
         {
-            for (int x = 0; x < width - 1; x++)
+            for (int x = 0; x < width; x++)
             {
-                // Get the 4 corners of the current cell
-                bool topLeft = grid[x, y];
-                bool topRight = grid[x + 1, y];
-                bool bottomRight = grid[x + 1, y + 1];
-                bool bottomLeft = grid[x, y + 1];
-
-                // Determine the case (0-15) based on which corners are solid
-                int caseIndex = 0;
-                if (topLeft)
-                    caseIndex |= 1;
-                if (topRight)
-                    caseIndex |= 2;
-                if (bottomRight)
-                    caseIndex |= 4;
-                if (bottomLeft)
-                    caseIndex |= 8;
-
-                // Skip empty or full cells
-                if (caseIndex == 0 || caseIndex == 15)
+                if (!grid[x, y])
                     continue;
 
-                // Generate edges based on the case
-                List<Edge> edges = GetEdgesForCase(caseIndex, x, y);
+                // Calculate how far right and down we can go (quick estimate)
+                int maxRight = 0;
+                int maxDown = 0;
 
-                foreach (var edge in edges)
-                {
-                    // Create a unique key for this edge
-                    string edgeKey = GetEdgeKey(edge.Start, edge.End);
+                while (x + maxRight < width && grid[x + maxRight, y])
+                    maxRight++;
 
-                    if (edgeToContourMap.TryGetValue(edgeKey, out int contourIndex))
-                    {
-                        // This edge already exists in a contour, remove it (handles internal edges)
-                        edgeToContourMap.Remove(edgeKey);
-                    }
-                    else
-                    {
-                        // Add this edge to a new or existing contour
-                        contourIndex = AddEdgeToContours(contours, edge);
-                        edgeToContourMap[edgeKey] = contourIndex;
-                    }
-                }
+                while (y + maxDown < height && grid[x, y + maxDown])
+                    maxDown++;
+
+                // Use area as priority (higher = process first)
+                int priority = maxRight * maxDown;
+                _cellInfoPool.Add(new CellInfo(x, y, priority));
             }
         }
 
-        // Clean up and close any open contours
-        for (int i = 0; i < contours.Count; i++)
+        // Sort cells by priority (descending)
+        _cellInfoPool.Sort();
+
+        // Process cells in priority order
+        foreach (var cell in _cellInfoPool)
         {
-            if (
-                contours[i].Count > 0
-                && !Equals(contours[i][0], contours[i][contours[i].Count - 1])
-            )
+            int x = cell.X;
+            int y = cell.Y;
+
+            if (processed[x, y] || !grid[x, y])
+                continue;
+
+            // Find maximum rectangle from this cell
+            int maxWidth = 0;
+            int maxHeight = 0;
+
+            // Expand right as far as possible
+            while (x + maxWidth < width && grid[x + maxWidth, y] && !processed[x + maxWidth, y])
+                maxWidth++;
+
+            // Try different heights and find the one that maximizes area
+            int bestHeight = 1;
+            int bestArea = maxWidth; // Initial area with height 1
+
+            for (int h = 1; h < height - y; h++)
             {
-                contours[i].Add(contours[i][0]); // Close the loop
+                // Check if we can expand to this height
+                bool canExpandHeight = true;
+                for (int dx = 0; dx < maxWidth; dx++)
+                {
+                    if (y + h >= height || !grid[x + dx, y + h] || processed[x + dx, y + h])
+                    {
+                        canExpandHeight = false;
+                        break;
+                    }
+                }
+
+                if (!canExpandHeight)
+                    break;
+
+                int area = maxWidth * (h + 1);
+                if (area > bestArea)
+                {
+                    bestArea = area;
+                    bestHeight = h + 1;
+                }
             }
-        }
 
-        return contours;
-    }
+            // We now have the best rectangle starting at (x,y)
+            maxHeight = bestHeight;
 
-    private static string GetEdgeKey(Vector2 p1, Vector2 p2)
-    {
-        // Create a consistent key regardless of direction
-        return Equals(p1, p2) ? $"{p1.X},{p1.Y}"
-            : (p1.X < p2.X || (p1.X == p2.X && p1.Y < p2.Y)) ? $"{p1.X},{p1.Y},{p2.X},{p2.Y}"
-            : $"{p2.X},{p2.Y},{p1.X},{p1.Y}";
-    }
-
-    private static int AddEdgeToContours(List<List<Vector2>> contours, Edge edge)
-    {
-        // Try to add to existing contour
-        for (int i = 0; i < contours.Count; i++)
-        {
-            var contour = contours[i];
-            if (contour.Count > 0)
+            // Mark cells as processed
+            for (int dy = 0; dy < maxHeight; dy++)
             {
-                Vector2 start = contour[0];
-                Vector2 end = contour[contour.Count - 1];
-
-                if (Equals(edge.Start, end))
+                for (int dx = 0; dx < maxWidth; dx++)
                 {
-                    contour.Add(edge.End);
-                    return i;
-                }
-                else if (Equals(edge.End, start))
-                {
-                    contour.Insert(0, edge.Start);
-                    return i;
+                    processed[x + dx, y + dy] = true;
                 }
             }
-        }
 
-        // Start new contour
-        var newContour = new List<Vector2> { edge.Start, edge.End };
-        contours.Add(newContour);
-        return contours.Count - 1;
+            // Add the rectangle
+            rectangles.Add(new Rectangle(x, y, maxWidth, maxHeight));
+        }
     }
 
-    private static List<Edge> GetEdgesForCase(int caseIndex, int x, int y)
+    /// <summary>
+    /// Try to merge rectangles to reduce the total count
+    /// </summary>
+    private void MergeRectangles(List<Rectangle> rectangles, List<Rectangle> tempRectangles)
     {
-        List<Edge> edges = [];
-        float cellSize = 1.0f;
+        bool merged;
 
-        // The midpoints of the cell edges
-        Vector2 top = new Vector2(x + 0.5f, y) * cellSize;
-        Vector2 right = new Vector2(x + 1, y + 0.5f) * cellSize;
-        Vector2 bottom = new Vector2(x + 0.5f, y + 1) * cellSize;
-        Vector2 left = new Vector2(x, y + 0.5f) * cellSize;
-
-        // Determine the edges based on the case
-        switch (caseIndex)
+        // Keep trying to merge until no more merges are possible
+        do
         {
-            case 1: // TopLeft
-                edges.Add(new Edge(left, top));
-                break;
-            case 2: // TopRight
-                edges.Add(new Edge(top, right));
-                break;
-            case 3: // TopLeft + TopRight
-                edges.Add(new Edge(left, right));
-                break;
-            case 4: // BottomRight
-                edges.Add(new Edge(right, bottom));
-                break;
-            case 5: // TopLeft + BottomRight (saddle point)
-                edges.Add(new Edge(left, top));
-                edges.Add(new Edge(right, bottom));
-                break;
-            case 6: // TopRight + BottomRight
-                edges.Add(new Edge(top, bottom));
-                break;
-            case 7: // TopLeft + TopRight + BottomRight
-                edges.Add(new Edge(left, bottom));
-                break;
-            case 8: // BottomLeft
-                edges.Add(new Edge(bottom, left));
-                break;
-            case 9: // TopLeft + BottomLeft
-                edges.Add(new Edge(top, bottom));
-                break;
-            case 10: // TopRight + BottomLeft (saddle point)
-                edges.Add(new Edge(top, right));
-                edges.Add(new Edge(bottom, left));
-                break;
-            case 11: // TopLeft + TopRight + BottomLeft
-                edges.Add(new Edge(right, bottom));
-                break;
-            case 12: // BottomRight + BottomLeft
-                edges.Add(new Edge(right, left));
-                break;
-            case 13: // TopLeft + BottomRight + BottomLeft
-                edges.Add(new Edge(top, right));
-                break;
-            case 14: // TopRight + BottomRight + BottomLeft
-                edges.Add(new Edge(top, left));
-                break;
-            // Case 0 and 15 are skipped (all empty or all filled)
-        }
+            merged = false;
 
-        return edges;
+            for (int i = 0; i < rectangles.Count; i++)
+            {
+                for (int j = i + 1; j < rectangles.Count; j++)
+                {
+                    if (rectangles[i].TryMerge(rectangles[j], out Rectangle mergedRect))
+                    {
+                        // Store the merged rectangle
+                        tempRectangles.Add(mergedRect);
+
+                        // Add all non-merged rectangles to the temp list
+                        for (int k = 0; k < rectangles.Count; k++)
+                        {
+                            if (k != i && k != j)
+                            {
+                                tempRectangles.Add(rectangles[k]);
+                            }
+                        }
+
+                        // Update counters
+                        MergedPolygons++;
+
+                        // Swap the lists
+                        rectangles.Clear();
+                        foreach (var rect in tempRectangles)
+                        {
+                            rectangles.Add(rect);
+                        }
+                        tempRectangles.Clear();
+
+                        // Flag that we merged something
+                        merged = true;
+                        break;
+                    }
+                }
+
+                if (merged)
+                    break;
+            }
+        } while (merged);
     }
 
-    private struct Edge
+    /// <summary>
+    /// Creates a rectangle vertices with the given dimensions (reuses vertices object)
+    /// </summary>
+    private Vertices CreateRectangleVertices(int x, int y, int width, int height)
     {
-        public Vector2 Start;
-        public Vector2 End;
+        // Create a new Vertices object with exact capacity to avoid resizing
+        Vertices rect = new Vertices(4);
 
-        public Edge(Vector2 start, Vector2 end)
-        {
-            Start = start;
-            End = end;
-        }
+        // Create rectangle vertices in counter-clockwise order
+        rect.Add(new Vector2(x, y));
+        rect.Add(new Vector2(x + width, y));
+        rect.Add(new Vector2(x + width, y + height));
+        rect.Add(new Vector2(x, y + height));
+
+        return rect;
     }
 }

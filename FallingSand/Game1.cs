@@ -175,11 +175,23 @@ public class Game1 : Game
 
         systemManager.Draw(gameTime);
 
-        // physicsDebugView.RenderDebugData(Camera.GetProjectionMatrix(), Camera.GetViewMatrix());
+        try
+        {
+            physicsDebugView.RenderDebugData(Camera.GetProjectionMatrix(), Camera.GetViewMatrix());
+        }
+        catch (IndexOutOfRangeException ex)
+        {
+            Console.WriteLine($"Physics debug rendering error: {ex.Message}");
+            Console.WriteLine(
+                $"Polygon stats - Total: {PixelsToPolygons.TotalPolygons}, "
+                    + $"Boxes: {PixelsToPolygons.BoxPolygons}, "
+                    + $"Merged: {PixelsToPolygons.MergedPolygons}"
+            );
+        }
 
-        // _spriteBatch.Begin();
-        // FrameCounter.DrawFps(_spriteBatch, spriteFont, new Vector2(5, 5), Color.Yellow);
-        // _spriteBatch.End();
+        _spriteBatch.Begin();
+        FrameCounter.DrawFps(_spriteBatch, spriteFont, new Vector2(5, 5), Color.Yellow);
+        _spriteBatch.End();
 
         base.Draw(gameTime);
     }

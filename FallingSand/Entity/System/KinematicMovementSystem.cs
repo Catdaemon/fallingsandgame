@@ -14,8 +14,11 @@ namespace FallingSand.Entity.System;
 class KinematicMovementSystem : ISystem
 {
     private readonly World World;
-    private const float RaycastDistance = 1f; // Distance to cast for ground detection
-    private Random random = new();
+    private const float RaycastDistance = 1.0f; // Shorter distance for more accurate local ground detection
+    private const float ForwardRaycastDistance = 1.5f; // Distance to raycast forward for downhill detection
+    private const float MaxClimbableSlopeAngle = 85.0f; // Maximum angle in degrees that can be climbed
+    private const int RaycastCount = 5; // Increased number of raycasts for better ground detection
+    private readonly Random random = new();
 
     public KinematicMovementSystem(World world)
     {
@@ -91,61 +94,83 @@ class KinematicMovementSystem : ISystem
                 var isWallSliding =
                     !isGrounded && (physicsBody.IsCollidingLeft || physicsBody.IsCollidingRight);
 
-                // Cast two rays to determine the ground normal
+                // Cast multiple rays to determine the ground normal
                 var body = physicsBody.PhysicsBody;
                 var position = body.Position;
                 var halfWidth = body.FixtureList[0].Shape.Radius;
                 var halfHeight = body.FixtureList[0].Shape.Radius;
 
-                // Create raycast start positions slightly offset from the bottom corners of the body
-                var startLeft = position + new Vector2(-halfWidth + 0.05f, halfHeight - 0.05f);
-                var startRight = position + new Vector2(halfWidth - 0.05f, halfHeight - 0.05f);
-                var endLeft = startLeft + new Vector2(0, RaycastDistance);
-                var endRight = startRight + new Vector2(0, RaycastDistance);
-
-                // Get ground hits and normals
-                bool hitLeftSuccess = CastRay(
-                    body,
-                    startLeft,
-                    endLeft,
-                    out var hitLeft,
-                    out var leftNormal
-                );
-                bool hitRightSuccess = CastRay(
-                    body,
-                    startRight,
-                    endRight,
-                    out var hitRight,
-                    out var rightNormal
-                );
-
                 // Default to standard up vector
                 Vector2 groundNormal = Vector2.UnitY;
                 bool validGroundNormal = false;
+                float shortestDistance = float.MaxValue;
 
-                // Calculate ground normal based on available hits
-                if (hitLeftSuccess && hitRightSuccess)
+                // Find direction of movement for forward raycasting
+                float moveDirection = inputState.Value.NormalisedMoveVector.X;
+                bool isMoving = Math.Abs(moveDirection) > 0.01f;
+
+                // Track if we found downhill terrain ahead
+                bool downhillAhead = false;
+                Vector2 downhillNormal = Vector2.UnitY;
+                float downhillDistance = float.MaxValue;
+
+                // Use multiple raycasts spread across the bottom of the body
+                for (int i = 0; i < RaycastCount; i++)
                 {
-                    // If both rays hit, calculate the ground tangent and then the normal
-                    Vector2 groundTangent = hitRight - hitLeft;
+                    // Calculate position along the bottom half of the body, from left to right
+                    float xOffset = -halfWidth + (i * (2 * halfWidth) / (RaycastCount - 1));
 
-                    if (groundTangent.LengthSquared() > 0.0001f) // Ensure we have a valid tangent
+                    // Add small vertical variation to better detect terrain features
+                    float yOffset = halfHeight - 0.1f - (i % 2 == 0 ? 0.1f : 0f);
+
+                    Vector2 start = position + new Vector2(xOffset, yOffset);
+                    Vector2 end = start + new Vector2(0, RaycastDistance);
+
+                    if (CastRay(body, start, end, out var hitPos, out var normal))
                     {
-                        groundTangent.Normalize();
-                        // Ground normal is perpendicular to tangent (rotate 90 degrees counterclockwise)
-                        groundNormal = new Vector2(-groundTangent.Y, groundTangent.X);
-                        validGroundNormal = true;
+                        float distance = Vector2.Distance(start, hitPos);
+                        if (distance < shortestDistance)
+                        {
+                            shortestDistance = distance;
+                            groundNormal = normal;
+                            validGroundNormal = true;
+                        }
                     }
-                }
-                else if (hitLeftSuccess)
-                {
-                    groundNormal = leftNormal;
-                    validGroundNormal = true;
-                }
-                else if (hitRightSuccess)
-                {
-                    groundNormal = rightNormal;
-                    validGroundNormal = true;
+
+                    // Check for downhill terrain when moving
+                    if (isMoving)
+                    {
+                        // Cast forward and slightly downward to detect downhill slopes
+                        float forwardDirection = Math.Sign(moveDirection);
+                        Vector2 forwardStart =
+                            position + new Vector2(forwardDirection * halfWidth, halfHeight - 0.1f);
+                        Vector2 forwardEnd =
+                            forwardStart
+                            + new Vector2(
+                                forwardDirection * ForwardRaycastDistance,
+                                RaycastDistance
+                            );
+
+                        if (
+                            CastRay(
+                                body,
+                                forwardStart,
+                                forwardEnd,
+                                out var forwardHit,
+                                out var forwardNormal
+                            )
+                        )
+                        {
+                            float forwardDistance = Vector2.Distance(forwardStart, forwardHit);
+                            // Only consider this a valid downhill if the normal points somewhat upward
+                            if (forwardNormal.Y < 0 && forwardDistance < downhillDistance)
+                            {
+                                downhillAhead = true;
+                                downhillNormal = forwardNormal;
+                                downhillDistance = forwardDistance;
+                            }
+                        }
+                    }
                 }
 
                 var physicsBodyRef = physicsBody.PhysicsBody;
@@ -168,41 +193,104 @@ class KinematicMovementSystem : ISystem
                 {
                     // Base movement speed
                     var moveSpeed = 4f;
-                    var moveDirection = inputState.Value.NormalisedMoveVector.X * moveSpeed;
+                    var moveDirectionSpeed = inputState.Value.NormalisedMoveVector.X * moveSpeed;
 
                     // Handle jumping
                     if (inputState.Value.Jump)
                     {
                         yVelocity = -6f;
-                        xVelocity = moveDirection; // Standard horizontal movement while jumping
+                        xVelocity = moveDirectionSpeed;
                     }
                     else if (validGroundNormal)
                     {
+                        // Check if we're on a downhill slope
+                        bool isDownhill = groundNormal.X * moveDirectionSpeed < 0;
+
+                        // Calculate the slope angle
+                        float slopeAngleDegrees = MathHelper.ToDegrees(
+                            (float)Math.Acos(Vector2.Dot(groundNormal, Vector2.UnitY))
+                        );
+                        bool isTooSteep = slopeAngleDegrees > MaxClimbableSlopeAngle;
+
                         // Follow the ground normal by projecting movement along the surface
-                        // First, get the ground tangent (perpendicular to normal)
                         Vector2 groundTangent = new Vector2(groundNormal.Y, -groundNormal.X);
 
                         // Make sure the tangent goes in the right direction based on input
                         if (
-                            (groundTangent.X < 0 && moveDirection > 0)
-                            || (groundTangent.X > 0 && moveDirection < 0)
+                            (groundTangent.X < 0 && moveDirectionSpeed > 0)
+                            || (groundTangent.X > 0 && moveDirectionSpeed < 0)
                         )
                         {
                             groundTangent = -groundTangent;
                         }
 
-                        // Project movement along the ground tangent
-                        float magnitude = Math.Abs(moveDirection);
-                        Vector2 movementVector = groundTangent * magnitude;
+                        if (isTooSteep && !isDownhill)
+                        {
+                            // If slope is too steep going uphill, limit movement
+                            bool movingUpSlope =
+                                (groundNormal.X > 0 && moveDirectionSpeed > 0)
+                                || (groundNormal.X < 0 && moveDirectionSpeed < 0);
 
-                        // Apply the movement
-                        xVelocity = movementVector.X;
-                        yVelocity = movementVector.Y;
+                            if (movingUpSlope)
+                            {
+                                // Very limited movement on very steep uphill slopes
+                                xVelocity = moveDirectionSpeed * 0.1f;
+                                yVelocity = 0;
+                            }
+                            else
+                            {
+                                // Going downhill on steep slopes - use ground tangent for movement
+                                float magnitude = Math.Abs(moveDirectionSpeed);
+                                Vector2 movementVector = groundTangent * magnitude;
+
+                                // Apply the movement with a slight increase for downhill acceleration
+                                xVelocity = movementVector.X * 1.2f;
+                                yVelocity = movementVector.Y * 1.2f;
+                            }
+                        }
+                        else
+                        {
+                            // Standard slope following
+                            float magnitude = Math.Abs(moveDirectionSpeed);
+                            Vector2 movementVector = groundTangent * magnitude;
+
+                            // Apply the movement
+                            xVelocity = movementVector.X;
+                            yVelocity = movementVector.Y;
+
+                            // Add extra downward force on downhill to keep player on ground
+                            if (isDownhill && isMoving)
+                            {
+                                yVelocity += 1.0f;
+                            }
+                        }
+
+                        // If we're moving and there's downhill terrain ahead but we're not currently on a downhill,
+                        // apply a small downward force to help the player follow the terrain
+                        if (
+                            isMoving
+                            && downhillAhead
+                            && !isDownhill
+                            && Math.Sign(moveDirectionSpeed)
+                                == Math.Sign(inputState.Value.NormalisedMoveVector.X)
+                        )
+                        {
+                            // Calculate how much to pull the player down to follow the terrain
+                            // The closer we are to the edge, the stronger the downward force
+                            float edgeProximityFactor =
+                                1.0f
+                                - MathHelper.Clamp(
+                                    downhillDistance / ForwardRaycastDistance,
+                                    0f,
+                                    1f
+                                );
+                            yVelocity += 2.0f * edgeProximityFactor;
+                        }
                     }
                     else
                     {
                         // Fallback when no valid ground normal
-                        xVelocity = moveDirection;
+                        xVelocity = moveDirectionSpeed;
                     }
                 }
                 else if (isSwimming)

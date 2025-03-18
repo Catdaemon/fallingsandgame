@@ -42,8 +42,9 @@ static class PhysicsBodyGenerator
 
         try
         {
-            // Generate polygons using our simplified approach
+            // Get thread-local instance and generate polygons
             var polygons = PixelsToPolygons
+                .GetInstance()
                 .Generate(ref data, Constants.CHUNK_WIDTH, Constants.CHUNK_HEIGHT)
                 .ToList();
 
