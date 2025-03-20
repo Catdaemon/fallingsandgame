@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using Arch.Core;
+using Arch.Core.Extensions;
 using FallingSand.Entity.Component;
 using FallingSand.Entity.Sprites;
 using FallingSand.Entity.System;
@@ -85,8 +86,18 @@ public class Game1 : Game
 
         base.LoadContent();
 
-        ecsWorld.CreatePlayer(new WorldPosition(100, -100));
-        ecsWorld.CreateChest(new WorldPosition(200, -100));
+        var player = ecsWorld.CreatePlayer(
+            new Vector2(Convert.PixelsToMeters(100), Convert.PixelsToMeters(-100))
+        );
+        ecsWorld.CreateChest(
+            new Vector2(Convert.PixelsToMeters(220), Convert.PixelsToMeters(-100))
+        );
+        var weapon = ecsWorld.CreateWeapon(
+            new Vector2(Convert.PixelsToMeters(300), Convert.PixelsToMeters(-100)),
+            WeaponType.Pistol
+        );
+        weapon.Get<EquippableComponent>().IsActive = true;
+        weapon.Get<EquippableComponent>().Parent = player;
     }
 
     protected override void Update(GameTime gameTime)

@@ -14,9 +14,11 @@ struct InputState
     public float Right;
     public bool Jump;
     public bool Shoot;
+    public bool InventoryNext;
+    public bool InventoryPrevious;
 
     public Vector2 AimVector;
-    public Vector2 NormalisedMoveVector => new Vector2(Right - Left, Down - Up);
+    public readonly Vector2 NormalisedMoveVector => new(Right - Left, Down - Up);
     public Vector2 MousePosition;
 }
 
@@ -31,6 +33,8 @@ class InputSystem : ISystem
         Right = 0,
         Jump = false,
         Shoot = false,
+        InventoryNext = false,
+        InventoryPrevious = false,
         AimVector = Vector2.Zero,
         MousePosition = Vector2.Zero,
     };
@@ -72,6 +76,8 @@ class InputSystem : ISystem
         State.Shoot = false;
         State.AimVector = Vector2.Zero;
         State.MousePosition = Vector2.Zero;
+        State.InventoryNext = false;
+        State.InventoryPrevious = false;
     }
 
     private InputState UpdateKeyboard()
@@ -90,11 +96,17 @@ class InputSystem : ISystem
 
     private InputState UpdateMouse()
     {
+        var screenSize = Camera.GetSize();
         var mouse = Mouse.GetState();
+
+        // Calculate normal aim vector from the center of the screen
+        var center = new Vector2(screenSize.X / 2, screenSize.Y / 2);
+        var aimVector = new Vector2(mouse.X, mouse.Y) - center;
+        aimVector.Normalize();
 
         return new InputState
         {
-            AimVector = new Vector2(mouse.X, mouse.Y),
+            AimVector = aimVector,
             Shoot = mouse.LeftButton == ButtonState.Pressed,
         };
     }

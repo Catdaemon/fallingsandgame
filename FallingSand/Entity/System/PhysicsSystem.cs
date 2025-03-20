@@ -13,7 +13,7 @@ class PhysicsSystem : ISystem
 {
     private readonly nkast.Aether.Physics2D.Dynamics.World PhysicsWorld;
     private readonly Arch.Core.World ECSWorld;
-    private static Object particleTag = new Object();
+    private static readonly object particleTag = new();
 
     public PhysicsSystem(
         Arch.Core.World ecsWorld,
@@ -169,6 +169,7 @@ class PhysicsSystem : ISystem
                     ),
                     bodyType: BodyType.Dynamic
                 );
+                createdBody.LinearVelocity = circle.InitialVelocity;
                 if (circle.CreateSensors)
                 {
                     CreateDirectionalCollisionSensors(createdBody, entity);
@@ -212,6 +213,31 @@ class PhysicsSystem : ISystem
             }
             if (createdBody != null)
             {
+                // Bullet setup
+                if (entity.Has<BulletComponent>())
+                {
+                    createdBody.IsBullet = true;
+
+                    createdBody.OnCollision += (fixtureA, fixtureB, contact) =>
+                    {
+                        var bulletComponent = entity.Get<BulletComponent>();
+                        if (fixtureB.Body.Tag == particleTag)
+                        {
+                            return false;
+                        }
+                        if (fixtureB.Body.BodyType == BodyType.Dynamic)
+                        {
+                            var entityB = (Arch.Core.Entity)fixtureB.Body.Tag;
+                            bulletComponent.CollidedWithEntity = entityB;
+                        }
+                        bulletComponent.HasCollided = true;
+                        return true;
+                    };
+                }
+                if (createdBody.Tag == null)
+                {
+                    createdBody.Tag = entity;
+                }
                 entity.Add(new PhysicsBodyComponent { PhysicsBody = createdBody });
             }
         }
@@ -248,6 +274,33 @@ class PhysicsSystem : ISystem
                         "Physics body is null in PhysicsBodyComponent - do not instantiate PhysicsBodyComponent outside of PhysicsSystem"
                     );
                 }
+
+                // Enable/disable physics objects based on camera visibility
+                var cameraVisibleArea = Camera.GetVisibleArea();
+                var cameraVisibleAreaStartWorldSpace = new Vector2(
+                    Convert.PixelsToMeters(cameraVisibleArea.start.X),
+                    Convert.PixelsToMeters(cameraVisibleArea.start.Y)
+                );
+                var cameraVisibleAreaEndWorldSpace = new Vector2(
+                    Convert.PixelsToMeters(cameraVisibleArea.end.X),
+                    Convert.PixelsToMeters(cameraVisibleArea.end.Y)
+                );
+                physicsBody.PhysicsBody.FixtureList[0].GetAABB(out var aabb, 0);
+
+                if (
+                    aabb.LowerBound.X > cameraVisibleAreaEndWorldSpace.X
+                    || aabb.LowerBound.Y > cameraVisibleAreaEndWorldSpace.Y
+                    || aabb.UpperBound.X < cameraVisibleAreaStartWorldSpace.X
+                    || aabb.UpperBound.Y < cameraVisibleAreaStartWorldSpace.Y
+                )
+                {
+                    physicsBody.PhysicsBody.Enabled = false;
+                }
+                else
+                {
+                    physicsBody.PhysicsBody.Enabled = true;
+                }
+
                 // if (entity.Has<InputStateComponent>())
                 // {
                 //     // Update the physics object based on the input state
@@ -270,15 +323,6 @@ class PhysicsSystem : ISystem
                         physicsBody.PhysicsBody.LinearVelocity
                     );
                     positionComponent.Angle = physicsBody.PhysicsBody.Rotation;
-                    // Update the facing direction if we are moving
-                    if (Math.Abs(positionComponent.Velocity.X) > 1f)
-                    {
-                        positionComponent.FacingDirection.X = positionComponent.Velocity.X;
-                    }
-                    if (Math.Abs(positionComponent.Velocity.Y) > 1f)
-                    {
-                        positionComponent.FacingDirection.Y = positionComponent.Velocity.Y;
-                    }
                 }
                 if (entity.Has<BoundingBoxComponent>())
                 {

@@ -6,7 +6,7 @@ namespace FallingSand;
 
 static partial class Util
 {
-    public static Arch.Core.Entity CreatePlayer(this World world, WorldPosition position)
+    public static Arch.Core.Entity CreatePlayer(this World world, Vector2 position)
     {
         var player = world.Create(
             new PositionComponent(),
@@ -31,7 +31,7 @@ static partial class Util
         return player;
     }
 
-    public static Arch.Core.Entity CreateChest(this World world, WorldPosition position)
+    public static Arch.Core.Entity CreateChest(this World world, Vector2 position)
     {
         var entity = world.Create(
             new PositionComponent(),
@@ -43,6 +43,34 @@ static partial class Util
                 Density = 100f,
             },
             new SpriteComponent("Chest", "Idle", new Rectangle(0, 0, 32, 32))
+        );
+
+        return entity;
+    }
+
+    public static Arch.Core.Entity CreateWeapon(
+        this World world,
+        Vector2 position,
+        WeaponType weaponType
+    )
+    {
+        var weaponComponent = new WeaponComponent(weaponType);
+        var entity = world.Create(
+            new PositionComponent(),
+            new RectanglePhysicsBodyComponent
+            {
+                Width = 8,
+                Height = 8,
+                InitialPosition = position,
+                Density = 1f,
+            },
+            new EquippableComponent(),
+            weaponComponent,
+            new SpriteComponent(
+                weaponComponent.Config.SpriteName,
+                "Idle",
+                new Rectangle(0, 0, 16, 16)
+            )
         );
 
         return entity;

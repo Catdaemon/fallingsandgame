@@ -173,6 +173,9 @@ class KinematicMovementSystem : ISystem
                     }
                 }
 
+                // Update our facing direction based on input aim angle
+                positionComponent.FacingDirection = inputState.Value.AimVector;
+
                 var physicsBodyRef = physicsBody.PhysicsBody;
 
                 // Check if swimming

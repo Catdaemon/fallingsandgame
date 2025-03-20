@@ -35,10 +35,13 @@ class SystemManager
         AddSystem(PhysicsSystem);
 
         AddSystem(new KinematicMovementSystem(World));
+        AddSystem(new WeaponSystem(World));
+        AddSystem(new BulletSystem(World));
         AddSystem(new CameraSystem(World));
         AddSystem(new SandInteractionSystemSystem(World, sandWorld));
         AddSystem(new LifetimeSystem(World));
         AddSystem(new RenderSystem(World, graphicsDevice));
+        AddSystem(new HUDSystem(World, graphicsDevice));
 
         foreach (var system in Systems)
         {

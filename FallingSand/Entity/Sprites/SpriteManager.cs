@@ -27,6 +27,11 @@ static class SpriteManager
         chestAnimations.Add("Idle", 0, 0, 5, true);
         chestAnimations.Add("Open", 1, 0, 3, false);
         spriteAnimations["Chest"] = chestAnimations;
+
+        var pistolSpriteSheet = LoadSpriteSheet("Sprites/Pistol", 1, 1, 1);
+        var pistolAnimations = new SpriteAnimations(pistolSpriteSheet);
+        pistolAnimations.Add("Idle", 0, 0, 1, true);
+        spriteAnimations["Pistol"] = pistolAnimations;
     }
 
     public static SpriteSheet LoadSpriteSheet(string name, int rows, int columns, int frameRate)
