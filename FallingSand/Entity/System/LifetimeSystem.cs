@@ -29,7 +29,8 @@ class LifetimeSystem : ISystem
             {
                 if (
                     lifetimeComponent.CreatedTime + lifetimeComponent.LifeTime
-                    < gameTime.TotalGameTime.TotalMilliseconds
+                        < gameTime.TotalGameTime.TotalMilliseconds
+                    && entity.IsAlive()
                 )
                 {
                     World.Destroy(entity);

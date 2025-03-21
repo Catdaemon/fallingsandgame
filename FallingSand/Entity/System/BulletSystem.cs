@@ -1,5 +1,6 @@
 using System.Linq;
 using Arch.Core;
+using Arch.Core.Extensions;
 using FallingSand.Entity.Component;
 using Microsoft.Xna.Framework;
 
@@ -27,7 +28,10 @@ class BulletSystem : ISystem
 
         if (!bullet.BulletBehaviours.Contains(BulletBehaviour.Bounce))
         {
-            World.Destroy(entity);
+            if (entity.IsAlive())
+            {
+                World.Destroy(entity);
+            }
         }
 
         bullet.HasCollided = false;

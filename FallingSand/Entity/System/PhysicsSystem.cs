@@ -220,8 +220,21 @@ class PhysicsSystem : ISystem
 
                     createdBody.OnCollision += (fixtureA, fixtureB, contact) =>
                     {
-                        var bulletComponent = entity.Get<BulletComponent>();
+                        if (fixtureA.Body.Tag is not Arch.Core.Entity bulletEntity)
+                        {
+                            return false;
+                        }
+
+                        ref var bulletComponent = ref bulletEntity.Get<BulletComponent>();
+
                         if (fixtureB.Body.Tag == particleTag)
+                        {
+                            return false;
+                        }
+                        if (
+                            fixtureB.Body.Tag is Arch.Core.Entity sourceEntity
+                            && sourceEntity == bulletComponent.Source
+                        )
                         {
                             return false;
                         }
@@ -231,6 +244,7 @@ class PhysicsSystem : ISystem
                             bulletComponent.CollidedWithEntity = entityB;
                         }
                         bulletComponent.HasCollided = true;
+                        bulletComponent.LifeTime = 0;
                         return true;
                     };
                 }

@@ -91,7 +91,7 @@ class WeaponSystem : ISystem
                                 {
                                     Damage = weapon.Config.Damage,
                                     Speed = weapon.Config.BulletSpeed,
-                                    Source = entity,
+                                    Source = equippable.Parent ?? entity,
                                     BulletBehaviours = weapon.Config.BulletBehaviours,
                                     LifeTime = 1000f,
                                     CreationTime = (float)gameTime.TotalGameTime.TotalMilliseconds,
