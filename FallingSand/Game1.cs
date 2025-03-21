@@ -135,34 +135,34 @@ public class Game1 : Game
         }
 
         // Check if the mouse is used
-        var mouseState = Mouse.GetState();
-        if (mouseState.LeftButton == ButtonState.Pressed)
-        {
-            // Paint material at cursor location
-            var mousePos = new Vector2(mouseState.X, mouseState.Y);
-            var worldPos = Camera.ScreenToWorldPosition(mousePos);
+        // var mouseState = Mouse.GetState();
+        // if (mouseState.LeftButton == ButtonState.Pressed)
+        // {
+        //     // Paint material at cursor location
+        //     var mousePos = new Vector2(mouseState.X, mouseState.Y);
+        //     var worldPos = Camera.ScreenToWorldPosition(mousePos);
 
-            // Draw in a circle around the cursor
+        //     // Draw in a circle around the cursor
 
-            for (int y = -3; y <= 3; y++)
-            {
-                for (int x = -3; x <= 3; x++)
-                {
-                    if (x * x + y * y <= 9) // Make it a circle, not a square
-                    {
-                        var pixelData = new FallingSandWorld.FallingSandPixelData
-                        {
-                            Material = paintMaterial,
-                            Color = paintColor,
-                        };
-                        sandWorld.SetPixel(
-                            new WorldPosition(worldPos.X + x, worldPos.Y + y),
-                            pixelData
-                        );
-                    }
-                }
-            }
-        }
+        //     for (int y = -3; y <= 3; y++)
+        //     {
+        //         for (int x = -3; x <= 3; x++)
+        //         {
+        //             if (x * x + y * y <= 9) // Make it a circle, not a square
+        //             {
+        //                 var pixelData = new FallingSandWorld.FallingSandPixelData
+        //                 {
+        //                     Material = paintMaterial,
+        //                     Color = paintColor,
+        //                 };
+        //                 sandWorld.SetPixel(
+        //                     new WorldPosition(worldPos.X + x, worldPos.Y + y),
+        //                     pixelData
+        //                 );
+        //             }
+        //         }
+        //     }
+        // }
 
         Camera.Update(gameTime);
         systemManager.Update(gameTime);

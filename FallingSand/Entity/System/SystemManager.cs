@@ -36,7 +36,7 @@ class SystemManager
 
         AddSystem(new KinematicMovementSystem(World));
         AddSystem(new WeaponSystem(World));
-        AddSystem(new BulletSystem(World));
+        AddSystem(new BulletSystem(World, sandWorld));
         AddSystem(new CameraSystem(World));
         AddSystem(new SandInteractionSystemSystem(World, sandWorld));
         AddSystem(new LifetimeSystem(World));

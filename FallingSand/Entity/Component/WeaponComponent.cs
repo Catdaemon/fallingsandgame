@@ -33,6 +33,7 @@ class WeaponConfig
     public IEnumerable<BulletBehaviour> BulletBehaviours { get; set; }
     public WeaponFireType FireType { get; set; }
     public string SpriteName { get; set; }
+    public string BulletSpriteName { get; set; }
     public float FireRate { get; set; }
     public float Damage { get; set; }
     public float BulletSpeed { get; set; }
@@ -58,6 +59,7 @@ static class WeaponConfigManager
             new WeaponConfig
             {
                 SpriteName = "Pistol",
+                BulletSpriteName = "Bullet",
                 BulletBehaviours = [],
                 FireType = WeaponFireType.Single,
                 FireRate = 1f,

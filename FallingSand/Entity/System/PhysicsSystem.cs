@@ -13,7 +13,6 @@ class PhysicsSystem : ISystem
 {
     private readonly nkast.Aether.Physics2D.Dynamics.World PhysicsWorld;
     private readonly Arch.Core.World ECSWorld;
-    private static readonly object particleTag = new();
 
     public PhysicsSystem(
         Arch.Core.World ecsWorld,
@@ -54,9 +53,12 @@ class PhysicsSystem : ISystem
             sensor.IsSensor = true;
             sensor.OnCollision += (fixtureA, fixtureB, contact) =>
             {
-                if (fixtureB.Body.Tag == particleTag)
+                if (fixtureB.Body.Tag is Arch.Core.Entity otherEntity)
                 {
-                    return false;
+                    if (otherEntity.Has<BulletComponent>() || otherEntity.Has<ParticleComponent>())
+                    {
+                        return false;
+                    }
                 }
 
                 onCollision();
@@ -113,19 +115,31 @@ class PhysicsSystem : ISystem
             bottomSensor.IsSensor = true;
             bottomSensor.OnCollision += (fixtureA, fixtureB, contact) =>
             {
-                if (fixtureB.Body.Tag == particleTag)
+                if (fixtureB.Body.Tag is Arch.Core.Entity otherEntity)
                 {
-                    return false;
+                    if (otherEntity.Has<BulletComponent>() || otherEntity.Has<ParticleComponent>())
+                    {
+                        return false;
+                    }
                 }
 
-                var component = entity.Get<PhysicsBodyComponent>();
+                ref var component = ref entity.Get<PhysicsBodyComponent>();
                 component.BottomCollisionCount++;
 
                 return true;
             };
             bottomSensor.OnSeparation += (fixtureA, fixtureB, contact) =>
             {
-                entity.Get<PhysicsBodyComponent>().BottomCollisionCount--;
+                if (fixtureB.Body.Tag is Arch.Core.Entity otherEntity)
+                {
+                    if (otherEntity.Has<BulletComponent>() || otherEntity.Has<ParticleComponent>())
+                    {
+                        return;
+                    }
+                }
+
+                ref var component = ref entity.Get<PhysicsBodyComponent>();
+                component.BottomCollisionCount--;
             };
         }
 
@@ -153,7 +167,6 @@ class PhysicsSystem : ISystem
                     Convert.PixelsToMeters(new Vector2(position.Position.X, position.Position.Y)),
                     bodyType: BodyType.Dynamic
                 );
-                createdBody.Tag = particleTag;
                 createdBody.OnCollision += onParticleCollide;
                 createdBody.IgnoreGravity = !particle.Gravity;
                 createdBody.LinearVelocity = position.Velocity;
@@ -227,7 +240,10 @@ class PhysicsSystem : ISystem
 
                         ref var bulletComponent = ref bulletEntity.Get<BulletComponent>();
 
-                        if (fixtureB.Body.Tag == particleTag)
+                        if (
+                            fixtureB.Body.Tag is Arch.Core.Entity otherEntity
+                            && otherEntity.Has<ParticleComponent>()
+                        )
                         {
                             return false;
                         }
@@ -290,30 +306,30 @@ class PhysicsSystem : ISystem
                 }
 
                 // Enable/disable physics objects based on camera visibility
-                var cameraVisibleArea = Camera.GetVisibleArea();
-                var cameraVisibleAreaStartWorldSpace = new Vector2(
-                    Convert.PixelsToMeters(cameraVisibleArea.start.X),
-                    Convert.PixelsToMeters(cameraVisibleArea.start.Y)
-                );
-                var cameraVisibleAreaEndWorldSpace = new Vector2(
-                    Convert.PixelsToMeters(cameraVisibleArea.end.X),
-                    Convert.PixelsToMeters(cameraVisibleArea.end.Y)
-                );
-                physicsBody.PhysicsBody.FixtureList[0].GetAABB(out var aabb, 0);
+                // var cameraVisibleArea = Camera.GetVisibleArea();
+                // var cameraVisibleAreaStartWorldSpace = new Vector2(
+                //     Convert.PixelsToMeters(cameraVisibleArea.start.X),
+                //     Convert.PixelsToMeters(cameraVisibleArea.start.Y)
+                // );
+                // var cameraVisibleAreaEndWorldSpace = new Vector2(
+                //     Convert.PixelsToMeters(cameraVisibleArea.end.X),
+                //     Convert.PixelsToMeters(cameraVisibleArea.end.Y)
+                // );
+                // physicsBody.PhysicsBody.FixtureList[0].GetAABB(out var aabb, 0);
 
-                if (
-                    aabb.LowerBound.X > cameraVisibleAreaEndWorldSpace.X
-                    || aabb.LowerBound.Y > cameraVisibleAreaEndWorldSpace.Y
-                    || aabb.UpperBound.X < cameraVisibleAreaStartWorldSpace.X
-                    || aabb.UpperBound.Y < cameraVisibleAreaStartWorldSpace.Y
-                )
-                {
-                    physicsBody.PhysicsBody.Enabled = false;
-                }
-                else
-                {
-                    physicsBody.PhysicsBody.Enabled = true;
-                }
+                // if (
+                //     aabb.LowerBound.X > cameraVisibleAreaEndWorldSpace.X
+                //     || aabb.LowerBound.Y > cameraVisibleAreaEndWorldSpace.Y
+                //     || aabb.UpperBound.X < cameraVisibleAreaStartWorldSpace.X
+                //     || aabb.UpperBound.Y < cameraVisibleAreaStartWorldSpace.Y
+                // )
+                // {
+                //     physicsBody.PhysicsBody.Enabled = false;
+                // }
+                // else
+                // {
+                //     physicsBody.PhysicsBody.Enabled = true;
+                // }
 
                 // if (entity.Has<InputStateComponent>())
                 // {

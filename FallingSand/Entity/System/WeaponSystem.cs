@@ -95,7 +95,12 @@ class WeaponSystem : ISystem
                                     BulletBehaviours = weapon.Config.BulletBehaviours,
                                     LifeTime = 1000f,
                                     CreationTime = (float)gameTime.TotalGameTime.TotalMilliseconds,
-                                }
+                                },
+                                new SpriteComponent(
+                                    weapon.Config.BulletSpriteName,
+                                    "Idle",
+                                    new Rectangle(0, 0, 4, 4)
+                                )
                             );
                         }
                     }

@@ -32,6 +32,11 @@ static class SpriteManager
         var pistolAnimations = new SpriteAnimations(pistolSpriteSheet);
         pistolAnimations.Add("Idle", 0, 0, 1, true);
         spriteAnimations["Pistol"] = pistolAnimations;
+
+        var bulletSpriteSheet = LoadSpriteSheet("Sprites/Bullet", 1, 1, 1);
+        var bulletAnimations = new SpriteAnimations(bulletSpriteSheet);
+        bulletAnimations.Add("Idle", 0, 0, 1, true);
+        spriteAnimations["Bullet"] = bulletAnimations;
     }
 
     public static SpriteSheet LoadSpriteSheet(string name, int rows, int columns, int frameRate)

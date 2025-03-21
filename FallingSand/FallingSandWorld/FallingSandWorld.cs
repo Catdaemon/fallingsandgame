@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using FallingSand;
+using Microsoft.Xna.Framework;
 
 namespace FallingSandWorld;
 
@@ -152,6 +153,102 @@ class FallingSandWorld
         var localPosition = WorldToLocalPosition(worldPosition);
 
         chunk.SetPixel(localPosition, pixel, velocity);
+    }
+
+    public void EmptyPixel(WorldPosition worldPosition)
+    {
+        var chunk = GetOrCreateChunkFromWorldPosition(worldPosition);
+        var localPosition = WorldToLocalPosition(worldPosition);
+
+        chunk.EmptyPixel(localPosition);
+    }
+
+    public void DeletePixels(WorldPosition center, int radius)
+    {
+        var startPos = new WorldPosition(center.X - radius, center.Y - radius);
+        var endPos = new WorldPosition(center.X + radius, center.Y + radius);
+
+        for (int x = startPos.X; x <= endPos.X; x++)
+        {
+            for (int y = startPos.Y; y <= endPos.Y; y++)
+            {
+                // Calculate distance from center
+                float dx = x - center.X;
+                float dy = y - center.Y;
+                float distance = MathF.Sqrt(dx * dx + dy * dy);
+
+                if (distance <= radius)
+                {
+                    EmptyPixel(new WorldPosition(x, y));
+                }
+            }
+        }
+    }
+
+    public void ExplodePixels(WorldPosition center, int radius)
+    {
+        var startPos = new WorldPosition(center.X - radius, center.Y - radius);
+        var endPos = new WorldPosition(center.X + radius, center.Y + radius);
+
+        for (int x = startPos.X; x <= endPos.X; x++)
+        {
+            for (int y = startPos.Y; y <= endPos.Y; y++)
+            {
+                // Calculate distance from center
+                float dx = x - center.X;
+                float dy = y - center.Y;
+                float distance = MathF.Sqrt(dx * dx + dy * dy);
+
+                if (distance <= radius)
+                {
+                    var pixel = GetPixel(new WorldPosition(x, y));
+                    if (pixel.Data.Material != Material.Empty)
+                    {
+                        SetPixel(
+                            new WorldPosition(x, y),
+                            new FallingSandPixelData
+                            {
+                                Material = Material.Smoke,
+                                Color = Color.Gray,
+                            }
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    public void DisruptPixels(WorldPosition center, int radius)
+    {
+        var startPos = new WorldPosition(center.X - radius, center.Y - radius);
+        var endPos = new WorldPosition(center.X + radius, center.Y + radius);
+
+        for (int x = startPos.X; x <= endPos.X; x++)
+        {
+            for (int y = startPos.Y; y <= endPos.Y; y++)
+            {
+                // Calculate distance from center
+                float dx = x - center.X;
+                float dy = y - center.Y;
+                float distance = MathF.Sqrt(dx * dx + dy * dy);
+
+                if (distance <= radius)
+                {
+                    var pixel = GetPixel(new WorldPosition(x, y));
+                    if (pixel.Data.Material != Material.Empty)
+                    {
+                        SetPixel(
+                            new WorldPosition(x, y),
+                            new FallingSandPixelData
+                            {
+                                Material = Material.Sand,
+                                Color = pixel.Data.Color,
+                            }
+                        );
+                    }
+                }
+            }
+        }
     }
 
     // public void SetPixelBatch(FallingSandWorldChunk chunk, FallingSandPixelData[] pixels, int width)

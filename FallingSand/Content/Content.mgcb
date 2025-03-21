@@ -46,6 +46,15 @@
 /processorParam:MakeSquare=False
 /build:Sprites/Pistol.png
 
+#begin Sprites/Bullet.png
+/importer:TextureImporter
+/processor:TextureProcessor
+/processorParam:GenerateMipmaps=False
+/processorParam:PremultiplyAlpha=True
+/processorParam:ResizeToPowerOfTwo=False
+/processorParam:MakeSquare=False
+/build:Sprites/Bullet.png
+
 #begin Shaders/WaterEffect.fx
 # /importer:EffectImporter
 # /processor:EffectProcessor
