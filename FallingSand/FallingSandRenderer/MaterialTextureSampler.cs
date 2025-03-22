@@ -24,6 +24,7 @@ class MaterialTextureSampler
 
         Load(Material.Sand, Path.Combine(path, "sand.png"));
         Load(Material.Stone, Path.Combine(path, "stone.png"));
+        Load(Material.Grass, Path.Combine(path, "grass.png"));
     }
 
     public Color GetPixel(Material material, int x, int y)

@@ -18,7 +18,7 @@ class WorldGenerationManager
         List<TileDefinition> previousState,
         List<TileDefinition> removedPossibilities
     )> DecisionHistory = new();
-
+    public List<Prefab> Prefabs = [];
     public Random Random;
 
     public WorldGenerationManager() { }
@@ -26,6 +26,7 @@ class WorldGenerationManager
     public void LoadAssets()
     {
         BiomeTiles = AssetLoader.LoadAssets();
+        Prefabs = AssetLoader.LoadPrefabs();
     }
 
     private Tile GetNextTileToCollapse()
@@ -86,15 +87,102 @@ class WorldGenerationManager
         }
     }
 
-    // <summary>
-    // Generate a world with the given width and height in tiles
-    // </summary>
+    // Process prefabs and convert them into preset tiles
+    private List<Tile> ProcessPrefabs(int worldWidth, int worldHeight, string biome)
+    {
+        var presetTiles = new List<Tile>();
+
+        foreach (var prefab in Prefabs)
+        {
+            // Get prefab location in grid coordinates
+            int prefabX = prefab.Location[0];
+            int prefabY = prefab.Location[1];
+            int prefabWidth = prefab.Size[0];
+            int prefabHeight = prefab.Size[1];
+
+            // Check if prefab is within world bounds
+            if (prefabX < 0 || prefabY < 0 || 
+                prefabX + prefabWidth > worldWidth || 
+                prefabY + prefabHeight > worldHeight)
+            {
+                Console.WriteLine($"Warning: Prefab {prefab.Ref} is outside world bounds and will be partially or completely skipped");
+                continue;
+            }
+
+            // Calculate how many tiles this prefab will create
+            int tileWidth = prefab.PixelData.GetLength(0) / IMAGE_SIZE;
+            int tileHeight = prefab.PixelData.GetLength(1) / IMAGE_SIZE;
+
+            // Create tiles from prefab image data
+            for (int ty = 0; ty < prefabHeight && ty < tileHeight; ty++)
+            {
+                for (int tx = 0; tx < prefabWidth && tx < tileWidth; tx++)
+                {
+                    // Calculate world coordinates for this tile
+                    int worldX = prefabX + tx;
+                    int worldY = prefabY + ty;
+
+                    if (worldX >= worldWidth || worldY >= worldHeight)
+                        continue;
+
+                    // Extract the material data for this specific tile from the prefab
+                    Material[] tileData = new Material[IMAGE_SIZE * IMAGE_SIZE];
+
+                    for (int y = 0; y < IMAGE_SIZE; y++)
+                    {
+                        for (int x = 0; x < IMAGE_SIZE; x++)
+                        {
+                            int prefabPixelX = tx * IMAGE_SIZE + x;
+                            int prefabPixelY = ty * IMAGE_SIZE + y;
+
+                            // Make sure the coordinate is within the prefab image bounds
+                            if (prefabPixelX < prefab.PixelData.GetLength(0) && 
+                                prefabPixelY < prefab.PixelData.GetLength(1))
+                            {
+                                tileData[y * IMAGE_SIZE + x] = prefab.PixelData[prefabPixelX, prefabPixelY];
+                            }
+                            else
+                            {
+                                tileData[y * IMAGE_SIZE + x] = Material.Empty;
+                            }
+                        }
+                    }
+
+                    // Create a special TileDefinition for this prefab tile
+                    var prefabTileDefinition = new TileDefinition { 
+                        PixelData = tileData,
+                        Name = $"{prefab.Ref}_x{worldX}_y{worldY}"
+                    };
+
+                    // Calculate edge hashes to ensure proper connections
+                    EdgeHasher.CalculateEdgeHashes(prefabTileDefinition);
+
+                    // Create a tile with this single possibility (fully collapsed)
+                    var prefabTile = new Tile
+                    {
+                        X = worldX,
+                        Y = worldY,
+                        Possibilities = [prefabTileDefinition],
+                        IsPrefabTile = true
+                    };
+
+                    presetTiles.Add(prefabTile);
+                }
+            }
+        }
+
+        return presetTiles;
+    }
+
+    /// <summary>
+    /// Generate a world with the given width and height in tiles
+    /// </summary>
     public GeneratedWorldInstance GenerateWorld(
         string seed,
         string biome,
         int width,
         int height,
-        List<Tile> presetTiles
+        List<Tile> presetTiles = null
     )
     {
         Random = new Random(seed.GetHashCode());
@@ -104,6 +192,7 @@ class WorldGenerationManager
         var totalTileCount = width * height;
         var completedTileCount = 0;
         var world = new Tile[width, height];
+
         DateTime startTime = DateTime.Now;
         TimeSpan timeout = TimeSpan.FromSeconds(90); // Adjust as needed
 
@@ -128,11 +217,75 @@ class WorldGenerationManager
             }
         }
 
-        // Set the preset tiles
-        foreach (var tile in presetTiles)
+        // Process prefabs first
+        var prefabTiles = ProcessPrefabs(width, height, biome);
+        if (prefabTiles.Count > 0)
         {
-            world[tile.X, tile.Y] = tile;
-            completedTileCount++;
+            Console.WriteLine($"Placed {prefabTiles.Count} prefab tiles");
+
+            // If we have user-specified preset tiles, add them to the prefab tiles
+            if (presetTiles != null)
+            {
+                prefabTiles.AddRange(presetTiles);
+            }
+
+            presetTiles = prefabTiles;
+        }
+
+        // Set the preset tiles
+        if (presetTiles != null)
+        {
+            foreach (var tile in presetTiles)
+            {
+                // Skip tiles outside of world bounds
+                if (tile.X < 0 || tile.Y < 0 || tile.X >= width || tile.Y >= height)
+                    continue;
+
+                world[tile.X, tile.Y] = tile;
+                completedTileCount++;
+
+                // Propagate constraints from prefab tiles to neighbors immediately
+                foreach (var (direction, neighbor) in GetNeighbors(tile, world))
+                {
+                    if (neighbor.Entropy <= 1)
+                        continue;
+
+                    // Find valid possibilities for this neighbor
+                    var validNeighborPossibilities = new List<TileDefinition>();
+                    foreach (var neighborPossibility in neighbor.Possibilities)
+                    {
+                        bool isValid = false;
+                        foreach (var currentPossibility in tile.Possibilities)
+                        {
+                            if (currentPossibility.CanBeNeighborTo(neighborPossibility, direction))
+                            {
+                                isValid = true;
+                                break;
+                            }
+                        }
+
+                        if (isValid)
+                        {
+                            validNeighborPossibilities.Add(neighborPossibility);
+                        }
+                    }
+
+                    // Update neighbor possibilities
+                    if (validNeighborPossibilities.Count < neighbor.Possibilities.Count && validNeighborPossibilities.Count > 0)
+                    {
+                        neighbor.Possibilities = validNeighborPossibilities;
+
+                        // Update the neighbor in the queue
+                        if (neighbor.Entropy > 1)
+                        {
+                            EnqueueTile(neighbor);
+                        }
+
+                        if (neighbor.Entropy == 1)
+                            completedTileCount++;
+                    }
+                }
+            }
         }
 
         // Track modified tiles
@@ -188,7 +341,7 @@ class WorldGenerationManager
             // Process neighbors
             foreach (var (direction, neighbor) in GetNeighbors(leastEntropy, world))
             {
-                if (neighbor.Entropy <= 1)
+                if (neighbor.Entropy <= 1 || neighbor.IsPrefabTile)
                     continue;
 
                 // Find valid possibilities for this neighbor

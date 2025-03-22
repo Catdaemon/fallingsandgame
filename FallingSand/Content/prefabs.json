@@ -1,0 +1,8 @@
+[
+  {
+    "ref": "surface hills",
+    "location": [0, 0],
+    "size": [100, 4],
+    "image": "Tiles/Surface/prefab_surface.png"
+  }
+]
