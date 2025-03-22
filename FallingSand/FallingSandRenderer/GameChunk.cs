@@ -232,14 +232,7 @@ class GameChunk
         SpriteBatch.End();
     }
 
-    public static readonly BlendState overwriteBlend = new()
-    {
-        ColorSourceBlend = Blend.SourceAlpha,
-        ColorDestinationBlend = Blend.SourceColor,
-        ColorBlendFunction = BlendFunction.Add,
-        AlphaSourceBlend = Blend.One,
-        AlphaDestinationBlend = Blend.Zero,
-    };
+    public static readonly BlendState overwriteBlend = BlendState.Opaque;
 
     // Draw to the render target
     public void Draw(GameTime gameTime)
@@ -374,7 +367,7 @@ class GameChunk
             return;
         }
 
-        var result = PhysicsBodyGenerator.Generate(SandChunk);
+        var result = PhysicsBodyGenerator.GetInstance().Generate(SandChunk);
         if (result != null)
         {
             FallingSandWorldChunkPolys.Clear();

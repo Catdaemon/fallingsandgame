@@ -62,7 +62,7 @@ static class WeaponConfigManager
                 BulletSpriteName = "Bullet",
                 BulletBehaviours = [],
                 FireType = WeaponFireType.Single,
-                FireRate = 1f,
+                FireRate = 10f,
                 Damage = 10f,
                 BulletSpeed = 20f,
                 MaxAmmo = 12,

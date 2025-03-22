@@ -2,26 +2,23 @@ using System;
 using System.Collections.Generic;
 using Microsoft.Xna.Framework;
 using nkast.Aether.Physics2D.Common;
-using nkast.Aether.Physics2D.Common.PolygonManipulation;
 
 namespace FallingSandWorld;
 
-// Changed from static class to instance-based class
 class PixelsToPolygons
 {
-    // Debug counters - still static for convenience
+    // Debug counters
     public static int TotalPolygons { get; private set; }
     public static int RejectedPolygons { get; private set; }
     public static int BoxPolygons { get; private set; }
     public static int MergedPolygons { get; private set; }
 
-    // Object pools now instance-based to support multiple threads
     private readonly List<CellInfo> _cellInfoPool;
     private readonly List<Rectangle> _rectanglePool;
     private readonly List<Rectangle> _tempRectanglePool;
     private readonly List<Vertices> _verticesPool;
 
-    // Thread local instance (singleton per thread)
+    // Thread local instance
     [ThreadStatic]
     private static PixelsToPolygons _threadInstance;
 
@@ -35,7 +32,7 @@ class PixelsToPolygons
         return _threadInstance;
     }
 
-    // Private constructor to enforce factory usage
+    // Enforce factory usage
     private PixelsToPolygons()
     {
         // Initialize pools with appropriate capacities
@@ -45,21 +42,12 @@ class PixelsToPolygons
         _verticesPool = new List<Vertices>(256);
     }
 
-    // Struct to represent a rectangle - using struct to avoid allocations
-    private struct Rectangle
+    private struct Rectangle(int x, int y, int width, int height)
     {
-        public int X,
-            Y,
-            Width,
-            Height;
-
-        public Rectangle(int x, int y, int width, int height)
-        {
-            X = x;
-            Y = y;
-            Width = width;
+        public int X = x,
+            Y = y,
+            Width = width,
             Height = height;
-        }
 
         // Check if this rectangle shares an edge with another
         public bool SharesEdgeWith(Rectangle other)
@@ -106,18 +94,11 @@ class PixelsToPolygons
     }
 
     // Struct to avoid allocating tuples
-    private struct CellInfo : IComparable<CellInfo>
+    private struct CellInfo(int x, int y, int priority) : IComparable<CellInfo>
     {
-        public int X;
-        public int Y;
-        public int Priority;
-
-        public CellInfo(int x, int y, int priority)
-        {
-            X = x;
-            Y = y;
-            Priority = priority;
-        }
+        public int X = x;
+        public int Y = y;
+        public int Priority = priority;
 
         public int CompareTo(CellInfo other)
         {
@@ -329,13 +310,14 @@ class PixelsToPolygons
     private Vertices CreateRectangleVertices(int x, int y, int width, int height)
     {
         // Create a new Vertices object with exact capacity to avoid resizing
-        Vertices rect = new Vertices(4);
-
-        // Create rectangle vertices in counter-clockwise order
-        rect.Add(new Vector2(x, y));
-        rect.Add(new Vector2(x + width, y));
-        rect.Add(new Vector2(x + width, y + height));
-        rect.Add(new Vector2(x, y + height));
+        Vertices rect =
+        [
+            // Create rectangle vertices in counter-clockwise order
+            new Vector2(x, y),
+            new Vector2(x + width, y),
+            new Vector2(x + width, y + height),
+            new Vector2(x, y + height),
+        ];
 
         return rect;
     }

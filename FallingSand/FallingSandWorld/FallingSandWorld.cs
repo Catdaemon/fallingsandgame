@@ -185,6 +185,46 @@ class FallingSandWorld
         }
     }
 
+    public void ScorchPixels(WorldPosition center, int startRadius, int scorchRadius)
+    {
+        // Scorch pixels in a circle around the center
+        var startPos = new WorldPosition(center.X - scorchRadius, center.Y - scorchRadius);
+        var endPos = new WorldPosition(center.X + scorchRadius, center.Y + scorchRadius);
+
+        for (int x = startPos.X; x <= endPos.X; x++)
+        {
+            for (int y = startPos.Y; y <= endPos.Y; y++)
+            {
+                // Calculate distance from center
+                float dx = x - center.X;
+                float dy = y - center.Y;
+                float distance = MathF.Sqrt(dx * dx + dy * dy);
+
+                if (distance <= scorchRadius)
+                {
+                    var pixel = GetPixel(new WorldPosition(x, y));
+                    if (pixel.Data.Material != Material.Empty)
+                    {
+                        // Darker version of the pixel Color
+                        var color = new Color(
+                            pixel.Data.Color.R / 2,
+                            pixel.Data.Color.G / 2,
+                            pixel.Data.Color.B / 2
+                        );
+                        SetPixel(
+                            new WorldPosition(x, y),
+                            new FallingSandPixelData
+                            {
+                                Material = pixel.Data.Material,
+                                Color = color,
+                            }
+                        );
+                    }
+                }
+            }
+        }
+    }
+
     public void ExplodePixels(WorldPosition center, int radius)
     {
         var startPos = new WorldPosition(center.X - radius, center.Y - radius);
@@ -216,6 +256,8 @@ class FallingSandWorld
                 }
             }
         }
+
+        ScorchPixels(center, radius, radius * 2);
     }
 
     public void DisruptPixels(WorldPosition center, int radius)

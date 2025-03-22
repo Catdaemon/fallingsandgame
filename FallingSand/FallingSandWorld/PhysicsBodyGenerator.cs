@@ -8,12 +8,31 @@ using nkast.Aether.Physics2D.Common.PolygonManipulation;
 
 namespace FallingSandWorld;
 
-static class PhysicsBodyGenerator
+class PhysicsBodyGenerator
 {
-    public static IEnumerable<Vertices> Generate(FallingSandWorldChunk chunk)
+    private bool[,] data;
+
+    [ThreadStatic]
+    private static PhysicsBodyGenerator _threadInstance;
+
+    public PhysicsBodyGenerator()
+    {
+        data = new bool[Constants.CHUNK_WIDTH, Constants.CHUNK_HEIGHT];
+    }
+
+    // Factory method to get thread-local instance
+    public static PhysicsBodyGenerator GetInstance()
+    {
+        if (_threadInstance == null)
+        {
+            _threadInstance = new PhysicsBodyGenerator();
+        }
+        return _threadInstance;
+    }
+
+    public IEnumerable<Vertices> Generate(FallingSandWorldChunk chunk)
     {
         var width = Constants.CHUNK_WIDTH;
-        bool[,] data = new bool[Constants.CHUNK_WIDTH, Constants.CHUNK_HEIGHT];
         var nSolidPixels = 0;
 
         // Convert chunk pixels to grid data
@@ -22,7 +41,12 @@ static class PhysicsBodyGenerator
             for (int x = 0; x < width; x++)
             {
                 var pixel = chunk.pixels[y * width + x];
-                if (pixel.Data.Material == Material.Empty || pixel.IsGas || pixel.IsLiquid)
+                if (
+                    pixel.Data.Material == Material.Empty
+                    || pixel.IsGas
+                    || pixel.IsLiquid
+                    || pixel.IsAwake
+                )
                 {
                     data[x, y] = false;
                 }
