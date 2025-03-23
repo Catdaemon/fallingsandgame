@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using FallingSand;
+using FallingSandWorld;
 
 namespace FallingSand.FallingSandRenderer;
 
@@ -21,6 +22,32 @@ class AsyncChunkPhysicsCalculator
         }
     }
 
+    private static void UpdatePhysicsPolygons(GameChunk chunk)
+    {
+        // Generate a physics mesh for the chunk
+        if (chunk.SandChunk == null || !chunk.HasGeneratedMap || chunk.polysUpdated)
+        {
+            chunk.IsCalculatingPhysics = false;
+            return;
+        }
+
+        var result = PhysicsBodyGenerator.GetInstance().Generate(chunk.SandChunk);
+        if (result != null)
+        {
+            chunk.FallingSandWorldChunkPolys.Clear();
+
+            // Copy to the concurrent bag
+            foreach (var item in result)
+            {
+                chunk.FallingSandWorldChunkPolys.Add(item);
+            }
+
+            chunk.polysUpdated = true;
+        }
+
+        chunk.IsCalculatingPhysics = false;
+    }
+
     private void DoWork()
     {
         while (IsRunning)
@@ -28,7 +55,7 @@ class AsyncChunkPhysicsCalculator
             while (ChunksToUpdate.TryDequeue(out var chunkToUpdate))
             {
                 // Update the physics polygons for the chunk
-                chunkToUpdate.UpdatePhysicsPolygons();
+                UpdatePhysicsPolygons(chunkToUpdate);
                 Thread.Yield();
             }
 

@@ -49,7 +49,6 @@ class GameWorld
         foreach (var (_, chunk) in GetCameraGameChunks(true))
         {
             chunk.Generate(true);
-            chunk.UpdatePhysicsPolygons();
             chunk.CreatePhysicsBodies();
         }
     }
@@ -82,7 +81,7 @@ class GameWorld
         this.spriteBatch = spriteBatch;
 
         // Load the water shader
-        waterShaderEffect = null; // game.Content.Load<Effect>("Shaders/WaterEffect");
+        waterShaderEffect = game.Content.Load<Effect>("Shaders/WaterEffect");
 
         var pixelTexture = new Texture2D(graphicsDevice, 1, 1);
         pixelTexture.SetData([Color.White]);
@@ -239,13 +238,9 @@ class GameWorld
 
     public void Draw(GameTime gameTime)
     {
-        // Set up water shader parameters - only set the time globally
-        if (waterShaderEffect != null)
-        {
-            waterShaderEffect
-                .Parameters["totalTime"]
-                .SetValue((float)gameTime.TotalGameTime.TotalSeconds);
-        }
+        waterShaderEffect
+            .Parameters["totalTime"]
+            .SetValue((float)gameTime.TotalGameTime.TotalSeconds);
 
         spriteBatch.Begin(
             transformMatrix: Camera.GetTransformMatrix(),
@@ -257,10 +252,7 @@ class GameWorld
         foreach (var (_, chunk) in visibleChunks)
         {
             // Set shader parameters specific to this chunk
-            // waterShaderEffect
-            //     .Parameters["resolution"]
-            //     .SetValue(new Vector2(Constants.CHUNK_WIDTH, Constants.CHUNK_HEIGHT));
-            // waterShaderEffect.Parameters["ScreenTexture"].SetValue(chunk.RenderTarget);
+            waterShaderEffect.Parameters["ScreenTexture"].SetValue(chunk.RenderTarget);
 
             // Apply the effect for this specific chunk
             spriteBatch.Draw(

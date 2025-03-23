@@ -25,15 +25,16 @@ class GameChunk
     public readonly Texture2D PixelTexture;
     private readonly GeneratedWorldInstance WorldTiles;
     private readonly MaterialTextureSampler MaterialTextureSampler;
-    private bool polysUpdated = false;
+    public bool polysUpdated = false;
     public bool IsCalculatingPhysics = false;
-    private readonly ConcurrentBag<Vertices> FallingSandWorldChunkPolys = [];
+    public readonly ConcurrentBag<Vertices> FallingSandWorldChunkPolys = [];
 
     // thread-safe list
     private readonly ConcurrentBag<Body> PhysicsBodies = [];
     public bool HasPhysicsBodies => !PhysicsBodies.IsEmpty;
     private readonly World PhysicsWorld;
     private readonly BasicEffect BasicEffect;
+    private readonly Color[] colorBuffer;
 
     public GameChunk(
         GraphicsDevice graphicsDevice,
@@ -81,6 +82,8 @@ class GameChunk
             0,
             1
         );
+
+        colorBuffer = new Color[Constants.CHUNK_WIDTH * Constants.CHUNK_HEIGHT];
     }
 
     // Usually called from AsyncChunkGenerator
@@ -154,17 +157,25 @@ class GameChunk
 
     private void DrawEntireChunk()
     {
+        var pixels = SandChunk.GetPixels();
+        if (pixels == null)
+        {
+            return;
+        }
+
+        // Copy the pixel data to the color buffer
         for (int y = 0; y < Constants.CHUNK_HEIGHT; y++)
         {
             for (int x = 0; x < Constants.CHUNK_WIDTH; x++)
             {
+                var pixel = pixels[y, x];
                 var index = y * Constants.CHUNK_WIDTH + x;
-                var pixel = SandChunk.GetPixelByIndex(index);
-                var pixelData = pixel.Data;
-
-                SpriteBatch.Draw(PixelTexture, new Rectangle(x, y, 1, 1), pixelData.Color);
+                colorBuffer[index] = pixel.Data.Color;
             }
         }
+
+        // Draw the entire buffer at once
+        RenderTarget.SetData(colorBuffer);
     }
 
     public static readonly BlendState overwriteBlend = BlendState.Opaque;
@@ -181,12 +192,10 @@ class GameChunk
         // totalTime += (float)gameTime.ElapsedGameTime.TotalSeconds;
 
         var renderedPixels = 0;
-        var hasPixels = SandChunk.pixelsToDraw.Any();
+        var hasPixels = !SandChunk.pixelsToDraw.IsEmpty;
         if (hasPixels)
         {
             GraphicsDevice.SetRenderTarget(RenderTarget);
-
-            // First draw non-water pixels
             SpriteBatch.Begin(blendState: overwriteBlend);
 
             while (SandChunk.pixelsToDraw.TryTake(out var position) && renderedPixels < 1000)
@@ -198,62 +207,21 @@ class GameChunk
                 }
                 else
                 {
-                    // Get pixel data
+                    // Draw individual pixels using SpriteBatch for small updates
+
                     var pixel = SandChunk.GetPixel(position);
-                    var pixelData = pixel.Data;
-
-                    if (pixelData.Material == Material.Water)
-                    {
-                        // Collect water pixels for later drawing with shader
-                        // waterPositions.Add(position);
-                    }
-
                     SpriteBatch.Draw(
                         PixelTexture,
                         new Rectangle(position.X, position.Y, 1, 1),
-                        pixelData.Color
+                        pixel.Data.Color
                     );
                 }
-
                 renderedPixels++;
             }
 
             SpriteBatch.End();
 
             GraphicsDevice.SetRenderTarget(null);
-
-            // Now draw water pixels using shader
-            // if (waterPositions.Count > 0 && waterShaderEffect != null)
-            // {
-            //     // Set the water render target
-            //     GraphicsDevice.SetRenderTarget(waterRenderTarget);
-            //     GraphicsDevice.Clear(Color.Transparent);
-
-            //     // Apply water shader
-            //     waterShaderEffect.Parameters["TotalTime"].SetValue(totalTime);
-            //     waterShaderEffect.Parameters["ScreenTexture"].SetValue(RenderTarget);
-
-            //     SpriteBatch.Begin(effect: waterShaderEffect);
-
-            //     foreach (var position in waterPositions)
-            //     {
-            //         var pixelData = SandChunk.GetPixel(position).Data;
-            //         SpriteBatch.Draw(
-            //             PixelTexture,
-            //             new Rectangle(position.X, position.Y, 1, 1),
-            //             pixelData.Color
-            //         );
-            //     }
-
-            //     SpriteBatch.End();
-
-            //     // Switch back to main render target and copy water pixels
-            //     GraphicsDevice.SetRenderTarget(RenderTarget);
-
-            //     SpriteBatch.Begin(blendState: BlendState.AlphaBlend);
-            //     SpriteBatch.Draw(waterRenderTarget, Vector2.Zero, Color.White);
-            //     SpriteBatch.End();
-            // }
         }
     }
 
@@ -269,7 +237,7 @@ class GameChunk
         {
             foreach (var body in PhysicsBodies)
             {
-                PhysicsWorld.Remove(body);
+                PhysicsWorld.RemoveAsync(body);
             }
             PhysicsBodies.Clear();
 
@@ -281,37 +249,10 @@ class GameChunk
                     position: Convert.PixelsToMeters(new Vector2(WorldOrigin.X, WorldOrigin.Y))
                 );
                 newBody.BodyType = BodyType.Static;
-
                 PhysicsBodies.Add(newBody);
             }
             polysUpdated = false;
         }
-    }
-
-    public void UpdatePhysicsPolygons()
-    {
-        // Generate a physics mesh for the chunk
-        if (SandChunk == null || !HasGeneratedMap || polysUpdated)
-        {
-            IsCalculatingPhysics = false;
-            return;
-        }
-
-        var result = PhysicsBodyGenerator.GetInstance().Generate(SandChunk);
-        if (result != null)
-        {
-            FallingSandWorldChunkPolys.Clear();
-
-            // Copy to the concurrent bag
-            foreach (var item in result)
-            {
-                FallingSandWorldChunkPolys.Add(item);
-            }
-
-            polysUpdated = true;
-        }
-
-        IsCalculatingPhysics = false;
     }
 
     public void Reset(WorldPosition newPosition)

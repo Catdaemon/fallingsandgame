@@ -246,4 +246,14 @@ class FallingSandWorldChunk
         int x = index % Constants.CHUNK_WIDTH;
         return pixelsMemory.Span[y, x];
     }
+
+    /// <summary>
+    /// Gets all pixels in the chunk
+    /// </summary>
+    /// <returns>Span of pixels</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public Span2D<FallingSandPixel> GetPixels()
+    {
+        return pixelsMemory.Span;
+    }
 }
