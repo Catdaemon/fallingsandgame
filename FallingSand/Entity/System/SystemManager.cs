@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Arch.Core;
+using FallingSand.FallingSandRenderer;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using nkast.Aether.Physics2D.Dynamics;
@@ -26,6 +27,7 @@ class SystemManager
     public void RegisterSystems(
         PhysicsWorld physicsWorld,
         FallingSandWorld.FallingSandWorld sandWorld,
+        GameWorld gameWorld,
         GraphicsDevice graphicsDevice
     )
     {
@@ -38,7 +40,7 @@ class SystemManager
         AddSystem(new WeaponSystem(World));
         AddSystem(new BulletSystem(World, sandWorld));
         AddSystem(new CameraSystem(World));
-        AddSystem(new SandInteractionSystemSystem(World, sandWorld));
+        AddSystem(new SandInteractionSystemSystem(World, sandWorld, gameWorld));
         AddSystem(new LifetimeSystem(World));
         AddSystem(new RenderSystem(World, graphicsDevice));
         AddSystem(new HUDSystem(World, graphicsDevice));

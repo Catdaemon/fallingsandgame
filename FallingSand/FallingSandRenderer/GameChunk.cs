@@ -35,6 +35,7 @@ class GameChunk
     private readonly World PhysicsWorld;
     private readonly BasicEffect BasicEffect;
     private readonly Color[] colorBuffer;
+    public bool ContainsEntities = false;
 
     public GameChunk(
         GraphicsDevice graphicsDevice,
@@ -273,6 +274,7 @@ class GameChunk
         HasGeneratedMap = false;
         IsCalculatingPhysics = false;
         polysUpdated = false;
+        ContainsEntities = false;
     }
 
     public void Unload()

@@ -116,6 +116,45 @@ class GameWorld
         }
     }
 
+    public void ResetOccupiedChunks()
+    {
+        // Reset all chunks to not occupied
+        foreach (var (_, chunk) in gameChunks)
+        {
+            chunk.ContainsEntities = false;
+        }
+    }
+
+    public void SetChunkOccupiedAt(Vector2 entityPosition)
+    {
+        var worldPosition = new WorldPosition((int)entityPosition.X, (int)entityPosition.Y);
+        var chunkPosition = new ChunkPosition(
+            (int)Math.Floor((float)worldPosition.X / Constants.CHUNK_WIDTH),
+            (int)Math.Floor((float)worldPosition.Y / Constants.CHUNK_HEIGHT)
+        );
+
+        // Set the chunk as occupied in a grid around the entity position
+        for (int x = -1; x <= 1; x++)
+        {
+            for (int y = -1; y <= 1; y++)
+            {
+                var offsetChunkPosition = new ChunkPosition(chunkPosition.X + x, chunkPosition.Y + y);
+             
+                if (offsetChunkPosition.X < 0 || offsetChunkPosition.Y < 0)
+                {
+                    continue;
+                }
+             
+                var chunk = GetOrCreateChunkFromChunkPosition(offsetChunkPosition);
+                
+                if (chunk != null)
+                {
+                    chunk.ContainsEntities = true;
+                }
+            }
+        }
+    }
+
     private readonly Queue<ChunkPosition> chunkUnloadQueue = new(Constants.INITIAL_CHUNK_POOL_SIZE);
     private const int MAX_CHUNKS_TO_UNLOAD = 2;
 
@@ -196,25 +235,16 @@ class GameWorld
         foreach (var (_, chunk) in visibleChunks)
         {
             // Don't update chunks that are not generated
-            if (chunk.SandChunk == null)
+            if (chunk.SandChunk == null || !chunk.HasGeneratedMap)
             {
-                continue;
-            }
-
-            // Always process chunks that don't have physics bodies yet
-            if (!chunk.HasPhysicsBodies)
-            {
-                asyncChunkPhysicsCalculator.Enqueue(chunk);
-                chunk.CreatePhysicsBodies();
-
                 continue;
             }
 
             // Don't update chunks that are not awake
-            if (!chunk.SandChunk.isAwake)
-            {
-                continue;
-            }
+            // if (!chunk.SandChunk.isAwake)
+            // {
+            //     continue;
+            // }
 
             // Don't update chunks that are currently calculating physics
             if (chunk.IsCalculatingPhysics)
@@ -222,8 +252,10 @@ class GameWorld
                 continue;
             }
 
-            asyncChunkPhysicsCalculator.Enqueue(chunk);
-            chunk.CreatePhysicsBodies();
+            if (chunk.ContainsEntities) {
+                asyncChunkPhysicsCalculator.Enqueue(chunk);
+                chunk.CreatePhysicsBodies();
+            }
         }
     }
 
