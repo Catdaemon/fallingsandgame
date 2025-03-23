@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using CommunityToolkit.HighPerformance;
 using Microsoft.Xna.Framework;
 using nkast.Aether.Physics2D.Common;
 
@@ -153,14 +154,8 @@ class PixelsToPolygons
         // Reuse a single processed grid across calls
         bool[,] processed = new bool[width, height];
 
-        // Reset the processed grid
-        for (int y = 0; y < height; y++)
-        {
-            for (int x = 0; x < width; x++)
-            {
-                processed[x, y] = false;
-            }
-        }
+        // Reset the processed grid using span operation
+        new Span2D<bool>(processed).Fill(false);
 
         // Calculate a heuristic value for each solid cell (potential area)
         for (int y = 0; y < height; y++)

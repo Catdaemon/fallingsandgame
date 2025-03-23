@@ -29,11 +29,6 @@ class GameChunk
     public bool IsCalculatingPhysics = false;
     private readonly ConcurrentBag<Vertices> FallingSandWorldChunkPolys = [];
 
-    // Water shader effect
-    private Effect waterShaderEffect;
-    private RenderTarget2D waterRenderTarget;
-    private float totalTime = 0f;
-
     // thread-safe list
     private readonly ConcurrentBag<Body> PhysicsBodies = [];
     public bool HasPhysicsBodies => !PhysicsBodies.IsEmpty;
@@ -48,8 +43,7 @@ class GameChunk
         FallingSandWorld.FallingSandWorld world,
         GeneratedWorldInstance worldTiles,
         World physicsWorld,
-        MaterialTextureSampler materialTextureSampler,
-        Effect waterEffect
+        MaterialTextureSampler materialTextureSampler
     )
     {
         WorldOrigin = worldOrigin;
@@ -59,20 +53,8 @@ class GameChunk
         SpriteBatch = spriteBatch;
         PhysicsWorld = physicsWorld;
         MaterialTextureSampler = materialTextureSampler;
-        waterShaderEffect = waterEffect;
 
         RenderTarget = new RenderTarget2D(
-            graphicsDevice,
-            Constants.CHUNK_WIDTH,
-            Constants.CHUNK_HEIGHT,
-            false,
-            SurfaceFormat.Color,
-            DepthFormat.Depth24, // Use depth buffer
-            0,
-            RenderTargetUsage.PreserveContents
-        );
-
-        waterRenderTarget = new RenderTarget2D(
             graphicsDevice,
             Constants.CHUNK_WIDTH,
             Constants.CHUNK_HEIGHT,
@@ -176,60 +158,13 @@ class GameChunk
         {
             for (int x = 0; x < Constants.CHUNK_WIDTH; x++)
             {
-                var pixel = SandChunk.pixels[y * Constants.CHUNK_WIDTH + x];
+                var index = y * Constants.CHUNK_WIDTH + x;
+                var pixel = SandChunk.GetPixelByIndex(index);
                 var pixelData = pixel.Data;
 
-                // Draw normal pixels as usual
-                if (pixelData.Material != Material.Water)
-                {
-                    SpriteBatch.Draw(PixelTexture, new Rectangle(x, y, 1, 1), pixelData.Color);
-                }
+                SpriteBatch.Draw(PixelTexture, new Rectangle(x, y, 1, 1), pixelData.Color);
             }
         }
-
-        // Draw water pixels separately using shader
-        DrawWaterPixels();
-    }
-
-    private void DrawWaterPixels()
-    {
-        if (waterShaderEffect == null)
-            return;
-
-        // Set the water render target to capture what's been drawn so far
-        GraphicsDevice.SetRenderTarget(waterRenderTarget);
-        GraphicsDevice.Clear(Color.Transparent);
-
-        // Begin sprite batch with water shader
-        waterShaderEffect.Parameters["TotalTime"].SetValue(totalTime);
-        waterShaderEffect.Parameters["ScreenTexture"].SetValue(RenderTarget);
-
-        SpriteBatch.Begin(effect: waterShaderEffect);
-
-        // Draw only water pixels
-        for (int y = 0; y < Constants.CHUNK_HEIGHT; y++)
-        {
-            for (int x = 0; x < Constants.CHUNK_WIDTH; x++)
-            {
-                var pixel = SandChunk.pixels[y * Constants.CHUNK_WIDTH + x];
-                var pixelData = pixel.Data;
-
-                if (pixelData.Material == Material.Water)
-                {
-                    // Draw water pixels with the shader
-                    SpriteBatch.Draw(PixelTexture, new Rectangle(x, y, 1, 1), pixelData.Color);
-                }
-            }
-        }
-
-        SpriteBatch.End();
-
-        // Switch back to main render target and copy water pixels
-        GraphicsDevice.SetRenderTarget(RenderTarget);
-
-        SpriteBatch.Begin(blendState: BlendState.AlphaBlend);
-        SpriteBatch.Draw(waterRenderTarget, Vector2.Zero, Color.White);
-        SpriteBatch.End();
     }
 
     public static readonly BlendState overwriteBlend = BlendState.Opaque;
@@ -243,19 +178,16 @@ class GameChunk
         }
 
         // Update total time for water animation
-        totalTime += (float)gameTime.ElapsedGameTime.TotalSeconds;
-
-        GraphicsDevice.SetRenderTarget(RenderTarget);
+        // totalTime += (float)gameTime.ElapsedGameTime.TotalSeconds;
 
         var renderedPixels = 0;
         var hasPixels = SandChunk.pixelsToDraw.Any();
         if (hasPixels)
         {
+            GraphicsDevice.SetRenderTarget(RenderTarget);
+
             // First draw non-water pixels
             SpriteBatch.Begin(blendState: overwriteBlend);
-
-            // Water pixels to draw after regular pixels
-            // List<LocalPosition> waterPositions = [];
 
             while (SandChunk.pixelsToDraw.TryTake(out var position) && renderedPixels < 1000)
             {
@@ -276,8 +208,6 @@ class GameChunk
                         // waterPositions.Add(position);
                     }
 
-                    // TODO: should this be drawn?
-                    // Draw regular pixels
                     SpriteBatch.Draw(
                         PixelTexture,
                         new Rectangle(position.X, position.Y, 1, 1),
@@ -289,6 +219,8 @@ class GameChunk
             }
 
             SpriteBatch.End();
+
+            GraphicsDevice.SetRenderTarget(null);
 
             // Now draw water pixels using shader
             // if (waterPositions.Count > 0 && waterShaderEffect != null)
@@ -323,8 +255,6 @@ class GameChunk
             //     SpriteBatch.End();
             // }
         }
-
-        GraphicsDevice.SetRenderTarget(null);
     }
 
     public void CreatePhysicsBodies()
@@ -388,16 +318,24 @@ class GameChunk
     {
         // Set the new position
         WorldOrigin = newPosition;
+
+        // Clear physics bodies
+        foreach (var body in PhysicsBodies)
+        {
+            PhysicsWorld.Remove(body);
+        }
+        PhysicsBodies.Clear();
+        FallingSandWorldChunkPolys.Clear();
+
+        // Reset chunk state
+        SandChunk = null;
+        HasGeneratedMap = false;
+        IsCalculatingPhysics = false;
+        polysUpdated = false;
     }
 
     public void Unload()
     {
-        // Clean up render targets
-        if (waterRenderTarget != null && !waterRenderTarget.IsDisposed)
-        {
-            waterRenderTarget.Dispose();
-        }
-
         // Unload the physics bodies
         foreach (var body in PhysicsBodies)
         {

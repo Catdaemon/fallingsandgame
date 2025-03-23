@@ -4,6 +4,8 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using Arch.Core;
+using CommunityToolkit.HighPerformance;
+using CommunityToolkit.HighPerformance.Buffers;
 using FallingSand;
 using FallingSand.Entity.Component;
 using Microsoft.Xna.Framework;
@@ -15,7 +17,8 @@ class FallingSandWorldChunk
     public ChunkPosition ChunkPos;
 
     public readonly FallingSandWorld parentWorld;
-    public readonly FallingSandPixel[] pixels;
+    private readonly FallingSandPixel[] pixelsArray;
+    private readonly Memory2D<FallingSandPixel> pixelsMemory;
     public ConcurrentBag<LocalPosition> pixelsToDraw = [];
     public bool isAwake = true;
 
@@ -23,21 +26,25 @@ class FallingSandWorldChunk
     {
         this.parentWorld = parentWorld;
         ChunkPos = chunkPos;
-        pixels = new FallingSandPixel[Constants.CHUNK_WIDTH * Constants.CHUNK_HEIGHT];
+        pixelsArray = new FallingSandPixel[Constants.CHUNK_WIDTH * Constants.CHUNK_HEIGHT];
+        pixelsMemory = new Memory2D<FallingSandPixel>(
+            pixelsArray,
+            Constants.CHUNK_HEIGHT,
+            Constants.CHUNK_WIDTH
+        );
         InitializePixels();
     }
 
     private void InitializePixels()
     {
-        for (int x = 0; x < Constants.CHUNK_WIDTH; x++)
+        // Access the pixels as a Span2D only for this method
+        Span2D<FallingSandPixel> pixels = pixelsMemory.Span;
+
+        for (int y = 0; y < Constants.CHUNK_HEIGHT; y++)
         {
-            for (int y = 0; y < Constants.CHUNK_HEIGHT; y++)
+            for (int x = 0; x < Constants.CHUNK_WIDTH; x++)
             {
-                pixels[y * Constants.CHUNK_WIDTH + x] = new FallingSandPixel(
-                    this,
-                    Material.Empty,
-                    Color.Transparent
-                );
+                pixels[y, x] = new FallingSandPixel(this, Material.Empty, Color.Transparent);
             }
         }
     }
@@ -46,22 +53,12 @@ class FallingSandWorldChunk
     {
         ChunkPos = newPosition;
         isAwake = true;
-        // ClearDrawQueue();
-        // Clear all pixels
-        // for (int x = 0; x < Constants.CHUNK_WIDTH; x++)
-        // {
-        //     for (int y = 0; y < Constants.CHUNK_HEIGHT; y++)
-        //     {
-        //         pixels[x, y].Empty();
-        //     }
-        // }
     }
 
     public void Wake()
     {
         if (!isAwake)
         {
-            // Console.WriteLine($"Waking chunk at {WorldX}, {WorldY}");
             isAwake = true;
         }
     }
@@ -81,18 +78,8 @@ class FallingSandWorldChunk
 
         bool anyPixelsUpdated = false;
 
-        // Update each pixel
-        // Invert the direction each frame to avoid bias
-
-        // Also invert Y direction each frame
-        //     for (
-        //         int y = leftFrame ? 0 : Constants.CHUNK_HEIGHT - 1;
-        //         leftFrame ? y < Constants.CHUNK_HEIGHT : y >= 0;
-        //         y += leftFrame ? 1 : -1
-        //     )
-        //     {
-        //         {
-
+        // Get a span for this method's scope
+        Span2D<FallingSandPixel> pixels = pixelsMemory.Span;
 
         for (
             int y = topFrame ? 0 : Constants.CHUNK_HEIGHT - 1;
@@ -106,7 +93,7 @@ class FallingSandWorldChunk
                 x += leftFrame ? 1 : -1
             )
             {
-                var pixel = pixels[y * Constants.CHUNK_WIDTH + x];
+                var pixel = pixels[y, x];
                 if (pixel.IsAwake)
                 {
                     // Update each pixel
@@ -120,32 +107,6 @@ class FallingSandWorldChunk
                 }
             }
         }
-
-        // Perform a second pass over awakened pixels
-        // This helps fill gaps by allowing immediate response to movements
-        // if (anyPixelsUpdated)
-        // {
-        //     for (
-        //         int y = !topFrame ? 0 : Constants.CHUNK_HEIGHT - 1; // Opposite direction of first pass
-        //         !topFrame ? y < Constants.CHUNK_HEIGHT : y >= 0;
-        //         y += !topFrame ? 1 : -1
-        //     )
-        //     {
-        //         for (
-        //             int x = !leftFrame ? 0 : Constants.CHUNK_WIDTH - 1; // Opposite direction of first pass
-        //             !leftFrame ? x < Constants.CHUNK_WIDTH : x >= 0;
-        //             x += !leftFrame ? 1 : -1
-        //         )
-        //         {
-        //             var pixel = pixels[y * Constants.CHUNK_WIDTH + x];
-        //             if (pixel.IsAwake && pixel.LastUpdatedFrameId < parentWorld.CurrentFrameId)
-        //             {
-        //                 var pixelPosition = new LocalPosition(x, y);
-        //                 pixel.Update(this, pixelPosition);
-        //             }
-        //         }
-        //     }
-        // }
 
         if (!anyPixelsUpdated)
         {
@@ -167,7 +128,7 @@ class FallingSandWorldChunk
             return new FallingSandPixel(this, Material.Empty, Color.Transparent);
         }
 
-        return pixels[position.Y * Constants.CHUNK_WIDTH + position.X];
+        return pixelsMemory.Span[position.Y, position.X];
     }
 
     public FallingSandPixel GetPixel(int x, int y)
@@ -192,8 +153,7 @@ class FallingSandWorldChunk
             return;
         }
 
-        pixels[localPosition.Y * Constants.CHUNK_WIDTH + localPosition.X]
-            .Set(newPixelData, velocity);
+        pixelsMemory.Span[localPosition.Y, localPosition.X].Set(newPixelData, velocity);
 
         if (!isBulkOperation)
         {
@@ -205,15 +165,25 @@ class FallingSandWorldChunk
 
     public void SetPixelBatch(FallingSandPixelData[] pixelData, int startIndex)
     {
-        // use startIndex as pixelData is a subset of the chunk
+        // Use Span to avoid bounds checking in the loop
+        ReadOnlySpan<FallingSandPixelData> dataSpan = pixelData;
+        Span2D<FallingSandPixel> pixels = pixelsMemory.Span;
+
+        // Calculate start coordinates
+        int startX = startIndex % Constants.CHUNK_WIDTH;
+        int startY = startIndex / Constants.CHUNK_WIDTH;
+
         for (int i = 0; i < pixelData.Length; i++)
         {
-            var withOffset = i + startIndex;
-            var x = withOffset % Constants.CHUNK_WIDTH;
-            var y = withOffset / Constants.CHUNK_WIDTH;
-            var pixel = pixels[y * Constants.CHUNK_WIDTH + x];
-            pixel.Data = pixelData[i];
-            pixel.ComputeProperties();
+            int x = (startX + i) % Constants.CHUNK_WIDTH;
+            int y = startY + ((startX + i) / Constants.CHUNK_WIDTH);
+
+            if (y < Constants.CHUNK_HEIGHT)
+            {
+                var pixel = pixels[y, x];
+                pixel.Data = dataSpan[i];
+                pixel.ComputeProperties();
+            }
         }
     }
 
@@ -222,12 +192,9 @@ class FallingSandWorldChunk
     {
         if (!IsInBounds(localPosition))
         {
-            // Console.WriteLine(
-            //     $"Tried to empty pixel outside of chunk: {localPosition.X}, {localPosition.Y}"
-            // );
             return;
         }
-        pixels[localPosition.Y * Constants.CHUNK_WIDTH + localPosition.X].Empty();
+        pixelsMemory.Span[localPosition.Y, localPosition.X].Empty();
         AddPixelToDrawQueue(localPosition);
         FallingSandPixel.WakeAdjacentPixels(this, localPosition);
         Wake();
@@ -267,5 +234,16 @@ class FallingSandWorldChunk
             worldPos.X - (ChunkPos.X * Constants.CHUNK_WIDTH),
             worldPos.Y - (ChunkPos.Y * Constants.CHUNK_HEIGHT)
         );
+    }
+
+    /// <summary>
+    /// Gets a pixel using the 1D array indexing pattern for backward compatibility
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public FallingSandPixel GetPixelByIndex(int index)
+    {
+        int y = index / Constants.CHUNK_WIDTH;
+        int x = index % Constants.CHUNK_WIDTH;
+        return pixelsMemory.Span[y, x];
     }
 }

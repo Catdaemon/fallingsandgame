@@ -94,8 +94,7 @@ class GameWorld
             sandWorld,
             worldTiles,
             physicsWorld,
-            materialTextureSampler,
-            waterShaderEffect
+            materialTextureSampler
         );
         gameChunkPool.Initialize(Constants.INITIAL_CHUNK_POOL_SIZE);
 
@@ -240,14 +239,30 @@ class GameWorld
 
     public void Draw(GameTime gameTime)
     {
-        // Draw the render targets to the screen
+        // Set up water shader parameters - only set the time globally
+        if (waterShaderEffect != null)
+        {
+            waterShaderEffect
+                .Parameters["totalTime"]
+                .SetValue((float)gameTime.TotalGameTime.TotalSeconds);
+        }
+
         spriteBatch.Begin(
             transformMatrix: Camera.GetTransformMatrix(),
             samplerState: SamplerState.PointWrap,
-            blendState: BlendState.AlphaBlend
+            blendState: BlendState.AlphaBlend,
+            effect: waterShaderEffect
         );
+
         foreach (var (_, chunk) in visibleChunks)
         {
+            // Set shader parameters specific to this chunk
+            // waterShaderEffect
+            //     .Parameters["resolution"]
+            //     .SetValue(new Vector2(Constants.CHUNK_WIDTH, Constants.CHUNK_HEIGHT));
+            // waterShaderEffect.Parameters["ScreenTexture"].SetValue(chunk.RenderTarget);
+
+            // Apply the effect for this specific chunk
             spriteBatch.Draw(
                 chunk.RenderTarget,
                 new Rectangle(

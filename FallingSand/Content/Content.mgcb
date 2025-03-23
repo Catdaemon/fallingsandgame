@@ -6,7 +6,6 @@
 /config:
 /profile:Reach
 /compress:False
-/quiet:false
 
 #-------------------------------- References --------------------------------#
 
@@ -55,9 +54,20 @@
 /processorParam:MakeSquare=False
 /build:Sprites/Bullet.png
 
+#begin bg_temp.png
+/importer:TextureImporter
+/processor:TextureProcessor
+/processorParam:GenerateMipmaps=False
+/processorParam:PremultiplyAlpha=True
+/processorParam:ResizeToPowerOfTwo=False
+/processorParam:MakeSquare=False
+/build:bg_temp.png
+
 #begin Shaders/WaterEffect.fx
-# /importer:EffectImporter
-# /processor:EffectProcessor
-# /processorParam:DebugMode=Auto
-# /processorParam:PreprocessMode=PassThrough
-# /build:Shaders/WaterEffect.fx
+/importer:EffectImporter
+/processor:EffectProcessor
+/processorParam:DebugMode=Auto
+/processorParam:PreprocessMode=PassThrough
+/build:Shaders/WaterEffect.fx
+
+

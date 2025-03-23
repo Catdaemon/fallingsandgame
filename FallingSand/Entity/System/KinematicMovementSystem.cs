@@ -182,8 +182,11 @@ class KinematicMovementSystem : ISystem
                 if (entity.Has<SandPixelReaderComponent>())
                 {
                     var pixelReader = entity.Get<SandPixelReaderComponent>();
-                    // TODO: lookup for is liquid
-                    if (pixelReader.Material == FallingSandWorld.Material.Water)
+                    // Check if the material is water or if we're in steam (for partial water effects)
+                    if (
+                        pixelReader.Material == FallingSandWorld.Material.Water
+                        || pixelReader.Material == FallingSandWorld.Material.Steam
+                    )
                     {
                         isSwimming = true;
                     }

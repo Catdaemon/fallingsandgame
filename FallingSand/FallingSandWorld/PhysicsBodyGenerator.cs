@@ -40,7 +40,7 @@ class PhysicsBodyGenerator
         {
             for (int x = 0; x < width; x++)
             {
-                var pixel = chunk.pixels[y * width + x];
+                var pixel = chunk.GetPixelByIndex(y * width + x);
                 if (
                     pixel.Data.Material == Material.Empty
                     || pixel.IsGas

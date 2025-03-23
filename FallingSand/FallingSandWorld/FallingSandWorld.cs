@@ -168,16 +168,19 @@ class FallingSandWorld
         var startPos = new WorldPosition(center.X - radius, center.Y - radius);
         var endPos = new WorldPosition(center.X + radius, center.Y + radius);
 
-        for (int x = startPos.X; x <= endPos.X; x++)
-        {
-            for (int y = startPos.Y; y <= endPos.Y; y++)
-            {
-                // Calculate distance from center
-                float dx = x - center.X;
-                float dy = y - center.Y;
-                float distance = MathF.Sqrt(dx * dx + dy * dy);
+        int radiusSquared = radius * radius; // Precalculate for performance
 
-                if (distance <= radius)
+        for (int y = startPos.Y; y <= endPos.Y; y++)
+        {
+            // Calculate y component of distance once per row
+            int dy = y - center.Y;
+            int dySquared = dy * dy;
+
+            for (int x = startPos.X; x <= endPos.X; x++)
+            {
+                // Calculate x component and complete the distance check
+                int dx = x - center.X;
+                if (dx * dx + dySquared <= radiusSquared)
                 {
                     EmptyPixel(new WorldPosition(x, y));
                 }
@@ -191,18 +194,20 @@ class FallingSandWorld
         var startPos = new WorldPosition(center.X - scorchRadius, center.Y - scorchRadius);
         var endPos = new WorldPosition(center.X + scorchRadius, center.Y + scorchRadius);
 
-        for (int x = startPos.X; x <= endPos.X; x++)
-        {
-            for (int y = startPos.Y; y <= endPos.Y; y++)
-            {
-                // Calculate distance from center
-                float dx = x - center.X;
-                float dy = y - center.Y;
-                float distance = MathF.Sqrt(dx * dx + dy * dy);
+        int scorchRadiusSquared = scorchRadius * scorchRadius;
 
-                if (distance <= scorchRadius)
+        for (int y = startPos.Y; y <= endPos.Y; y++)
+        {
+            int dy = y - center.Y;
+            int dySquared = dy * dy;
+
+            for (int x = startPos.X; x <= endPos.X; x++)
+            {
+                int dx = x - center.X;
+                if (dx * dx + dySquared <= scorchRadiusSquared)
                 {
-                    var pixel = GetPixel(new WorldPosition(x, y));
+                    var worldPos = new WorldPosition(x, y);
+                    var pixel = GetPixel(worldPos);
                     if (pixel.Data.Material != Material.Empty)
                     {
                         // Darker version of the pixel Color
@@ -212,7 +217,7 @@ class FallingSandWorld
                             pixel.Data.Color.B / 2
                         );
                         SetPixel(
-                            new WorldPosition(x, y),
+                            worldPos,
                             new FallingSandPixelData
                             {
                                 Material = pixel.Data.Material,
@@ -265,70 +270,38 @@ class FallingSandWorld
         var startPos = new WorldPosition(center.X - radius, center.Y - radius);
         var endPos = new WorldPosition(center.X + radius, center.Y + radius);
 
-        for (int x = startPos.X; x <= endPos.X; x++)
-        {
-            for (int y = startPos.Y; y <= endPos.Y; y++)
-            {
-                // Calculate distance from center
-                float dx = x - center.X;
-                float dy = y - center.Y;
-                float distance = MathF.Sqrt(dx * dx + dy * dy);
+        int radiusSquared = radius * radius;
 
-                if (distance <= radius)
+        for (int y = startPos.Y; y <= endPos.Y; y++)
+        {
+            int dy = y - center.Y;
+            int dySquared = dy * dy;
+
+            for (int x = startPos.X; x <= endPos.X; x++)
+            {
+                int dx = x - center.X;
+                if (dx * dx + dySquared <= radiusSquared)
                 {
-                    var pixel = GetPixel(new WorldPosition(x, y));
+                    var worldPosition = new WorldPosition(x, y);
+                    var pixel = GetPixel(worldPosition);
                     if (pixel.Data.Material != Material.Empty)
                     {
                         SetPixel(
-                            new WorldPosition(x, y),
+                            worldPosition,
                             new FallingSandPixelData
                             {
                                 Material = Material.Sand,
                                 Color = pixel.Data.Color,
                             }
                         );
+
+                        // Wake the chunk to ensure it is updated
+                        WakeChunkAt(worldPosition);
                     }
                 }
             }
         }
     }
-
-    // public void SetPixelBatch(FallingSandWorldChunk chunk, FallingSandPixelData[] pixels, int width)
-    // {
-    //     int height = pixels.Length / width;
-
-    //     // Group pixels by their chunk
-    //     var pixelsByChunk =
-    //         new Dictionary<ChunkPosition, List<(LocalPosition, FallingSandPixelData)>>();
-
-    //     for (int y = 0; y < height; y++)
-    //     {
-    //         for (int x = 0; x < width; x++)
-    //         {
-    //             int worldX = startPos.X + x;
-    //             int worldY = startPos.Y + y;
-    //             var worldPos = new WorldPosition(worldX, worldY);
-    //             var chunkPos = WorldToChunkPosition(worldPos);
-    //             var localPos = WorldToLocalPosition(worldPos);
-
-    //             if (!pixelsByChunk.TryGetValue(chunkPos, out var pixelList))
-    //             {
-    //                 pixelList = new List<(LocalPosition, FallingSandPixelData)>();
-    //                 pixelsByChunk[chunkPos] = pixelList;
-    //             }
-
-    //             pixelList.Add((localPos, pixels[y * width + x]));
-    //         }
-    //     }
-
-    //     // Apply pixels by chunk
-    //     foreach (var (chunkPos, pixelList) in pixelsByChunk)
-    //     {
-    //         var chunk = GetOrCreateChunkFromChunkPosition(chunkPos);
-    //         // Batch apply pixels to chunk
-    //         chunk.SetPixelBatch(pixelList);
-    //     }
-    // }
 
     public FallingSandPixel GetPixel(WorldPosition worldPosition)
     {
@@ -354,26 +327,10 @@ class FallingSandWorld
         CurrentFrameId++;
     }
 
-    public void Update(WorldPosition start, WorldPosition end)
+    private void UpdateSet(IEnumerable<FallingSandWorldChunk> chunks)
     {
-        // Get a list of all chunks in the bounding box which are awake
-        var chunkInBBox = GetChunksInBBox(start, end).Where(chunk => chunk.isAwake);
-
-        // To avoid thread safety issues, we'll update the chunks in an alternating checkerboard pattern based on the frame count
-        var checkerboardChunks = chunkInBBox.Where(chunk =>
-        {
-            return (chunk.ChunkPos.X + chunk.ChunkPos.Y + CurrentFrameId) % 2 == 0;
-        });
-
-        // Skip work entirely if no chunks need updating
-        if (!checkerboardChunks.Any())
-        {
-            CurrentFrameId++;
-            return;
-        }
-
         // Add chunks to queue
-        foreach (var chunk in chunkInBBox)
+        foreach (var chunk in chunks)
         {
             ChunksToUpdate.Add(chunk);
         }
@@ -392,6 +349,32 @@ class FallingSandWorld
         {
             Console.WriteLine("Warning: Update did not complete in time frame");
         }
+    }
+
+    public void Update(WorldPosition start, WorldPosition end)
+    {
+        // Get a list of all chunks in the bounding box which are awake
+        var chunkInBBox = GetChunksInBBox(start, end).Where(chunk => chunk.isAwake);
+
+        // To avoid thread safety issues, we'll update the chunks in an alternating checkerboard pattern based on the frame count
+        var checkerboardChunksA = chunkInBBox.Where(chunk =>
+        {
+            return (chunk.ChunkPos.X + chunk.ChunkPos.Y + CurrentFrameId) % 2 == 0;
+        });
+        var checkerboardChunksB = chunkInBBox.Where(chunk =>
+        {
+            return (chunk.ChunkPos.X + chunk.ChunkPos.Y + CurrentFrameId) % 2 == 0;
+        });
+
+        // Skip work entirely if no chunks need updating
+        if (!checkerboardChunksA.Any() || !checkerboardChunksB.Any())
+        {
+            CurrentFrameId++;
+            return;
+        }
+
+        UpdateSet(checkerboardChunksA);
+        UpdateSet(checkerboardChunksB);
 
         // Increment the frame count
         CurrentFrameId++;

@@ -36,6 +36,7 @@ public class Game1 : Game
     private readonly SystemManager systemManager;
     private readonly nkast.Aether.Physics2D.Dynamics.World physicsWorld = new();
     private readonly DebugView physicsDebugView;
+    private Texture2D backgroundTempTexture;
 
     public Game1()
     {
@@ -73,6 +74,8 @@ public class Game1 : Game
     {
         _spriteBatch = new SpriteBatch(GraphicsDevice);
         FrameCounter.LoadSetUp(this, graphics, _spriteBatch, false, true, false, false, 60, true);
+
+        backgroundTempTexture = Content.Load<Texture2D>("bg_temp");
 
         spriteFont = Content.Load<SpriteFont>("DiagnosticsFont");
         physicsDebugView.LoadContent(GraphicsDevice, Content);
@@ -181,24 +184,33 @@ public class Game1 : Game
         // Otherwise the background will be overwritten
         GraphicsDevice.Clear(Color.CornflowerBlue);
 
-        // Draw the render targets to the screen
-        gameWorld.Draw(gameTime);
+        // Draw our temp bg image
+        _spriteBatch.Begin();
+        _spriteBatch.Draw(
+            backgroundTempTexture,
+            new Rectangle(0, 0, worldSizeX, worldSizeY),
+            Color.White
+        );
+        _spriteBatch.End();
 
         systemManager.Draw(gameTime);
 
-        // try
-        // {
-        //     physicsDebugView.RenderDebugData(Camera.GetProjectionMatrix(), Camera.GetViewMatrix());
-        // }
-        // catch (IndexOutOfRangeException ex)
-        // {
-        //     Console.WriteLine($"Physics debug rendering error: {ex.Message}");
-        //     Console.WriteLine(
-        //         $"Polygon stats - Total: {PixelsToPolygons.TotalPolygons}, "
-        //             + $"Boxes: {PixelsToPolygons.BoxPolygons}, "
-        //             + $"Merged: {PixelsToPolygons.MergedPolygons}"
-        //     );
-        // }
+        // Draw the render targets to the screen
+        gameWorld.Draw(gameTime);
+
+        try
+        {
+            physicsDebugView.RenderDebugData(Camera.GetProjectionMatrix(), Camera.GetViewMatrix());
+        }
+        catch (IndexOutOfRangeException ex)
+        {
+            Console.WriteLine($"Physics debug rendering error: {ex.Message}");
+            Console.WriteLine(
+                $"Polygon stats - Total: {PixelsToPolygons.TotalPolygons}, "
+                    + $"Boxes: {PixelsToPolygons.BoxPolygons}, "
+                    + $"Merged: {PixelsToPolygons.MergedPolygons}"
+            );
+        }
 
         _spriteBatch.Begin();
         FrameCounter.DrawFps(_spriteBatch, spriteFont, new Vector2(5, 5), Color.Yellow);

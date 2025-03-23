@@ -1,7 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Threading;
+using CommunityToolkit.HighPerformance;
+using CommunityToolkit.HighPerformance.Buffers;
 using FallingSand;
 using FallingSandWorld.Pixels;
 using Microsoft.Xna.Framework;
@@ -109,18 +112,18 @@ class FallingSandPixel
         Material.Lava,
     };
 
-    private static readonly bool[] _isStatic = new bool[Enum.GetValues(typeof(Material)).Length];
-    private static readonly bool[] _isLiquid = new bool[Enum.GetValues(typeof(Material)).Length];
-    private static readonly bool[] _isGas = new bool[Enum.GetValues(typeof(Material)).Length];
-    private static readonly bool[] _isFire = new bool[Enum.GetValues(typeof(Material)).Length];
-    private static readonly byte[] _density = new byte[Enum.GetValues(typeof(Material)).Length];
-    private static readonly byte[] _flammability = new byte[
-        Enum.GetValues(typeof(Material)).Length
-    ];
+    // Use readonly arrays for better performance when accessing material properties
+    private static readonly bool[] _isStatic;
+    private static readonly bool[] _isLiquid;
+    private static readonly bool[] _isGas;
+    private static readonly bool[] _isFire;
+    private static readonly byte[] _density;
+    private static readonly byte[] _flammability;
 
     private static readonly ThreadLocal<Random> Random = new(() => new Random());
     private readonly FallingSandWorldChunk ParentChunk;
 
+    // Using static readonly field for adjacent offsets
     public static readonly (int, int)[] AdjacentOffsets = [(-1, 0), (1, 0), (0, -1), (0, 1)];
     public const float GRAVITY = 0.5f;
     public const float MAX_SPEED = 16f;
@@ -144,15 +147,30 @@ class FallingSandPixel
 
     static FallingSandPixel()
     {
-        // Initialize lookup arrays
+        // Optimize by preallocating arrays with exact size
+        int materialCount = Enum.GetValues(typeof(Material)).Length;
+        _isStatic = new bool[materialCount];
+        _isLiquid = new bool[materialCount];
+        _isGas = new bool[materialCount];
+        _isFire = new bool[materialCount];
+        _density = new byte[materialCount];
+        _flammability = new byte[materialCount];
+
+        // Use HashSet for faster lookups when initializing material property arrays
+        var staticMaterialsSet = new HashSet<Material>(STATIC_MATERIALS);
+        var liquidMaterialsSet = new HashSet<Material>(LIQUID_MATERIALS);
+        var gasMaterialsSet = new HashSet<Material>(GAS_MATERIALS);
+        var fireMaterialsSet = new HashSet<Material>(FIRE_MATERIALS);
+
         foreach (Material m in Enum.GetValues(typeof(Material)))
         {
-            _isStatic[(int)m] = STATIC_MATERIALS.Contains(m);
-            _isLiquid[(int)m] = LIQUID_MATERIALS.Contains(m);
-            _isGas[(int)m] = GAS_MATERIALS.Contains(m);
-            _isFire[(int)m] = FIRE_MATERIALS.Contains(m);
-            _density[(int)m] = MaterialProperties.Densities.GetValueOrDefault<Material, byte>(m, 0);
-            _flammability[(int)m] = MaterialProperties.Flammability.GetValueOrDefault<
+            int index = (int)m;
+            _isStatic[index] = staticMaterialsSet.Contains(m);
+            _isLiquid[index] = liquidMaterialsSet.Contains(m);
+            _isGas[index] = gasMaterialsSet.Contains(m);
+            _isFire[index] = fireMaterialsSet.Contains(m);
+            _density[index] = MaterialProperties.Densities.GetValueOrDefault<Material, byte>(m, 0);
+            _flammability[index] = MaterialProperties.Flammability.GetValueOrDefault<
                 Material,
                 byte
             >(m, 0);
@@ -406,6 +424,7 @@ class FallingSandPixel
         Wake();
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void ComputeProperties()
     {
         int materialIndex = (int)Data.Material;

@@ -26,6 +26,7 @@ static class AssetLoader
         { Color.Black, Material.Empty },
         { Color.White, Material.Stone },
         { new Color(0, 255, 0), Material.Grass },
+        { new Color(0, 0, 255), Material.Water },
     };
 
     private static TileDefinition ProcessRotatedAsset(SKBitmap bitmap, int rotation, bool flipped)

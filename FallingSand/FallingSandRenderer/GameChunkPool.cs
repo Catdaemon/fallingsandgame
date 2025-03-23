@@ -17,7 +17,6 @@ class GameChunkPool
     private readonly GeneratedWorldInstance worldTiles;
     private readonly nkast.Aether.Physics2D.Dynamics.World physicsWorld;
     private readonly MaterialTextureSampler materialTextureSampler;
-    private readonly Effect waterShaderEffect;
 
     public GameChunkPool(
         GraphicsDevice graphicsDevice,
@@ -26,8 +25,7 @@ class GameChunkPool
         FallingSandWorld.FallingSandWorld sandWorld,
         GeneratedWorldInstance worldTiles,
         nkast.Aether.Physics2D.Dynamics.World physicsWorld,
-        MaterialTextureSampler materialTextureSampler,
-        Effect waterShaderEffect
+        MaterialTextureSampler materialTextureSampler
     )
     {
         this.graphicsDevice = graphicsDevice;
@@ -37,7 +35,6 @@ class GameChunkPool
         this.physicsWorld = physicsWorld;
         this.pixelTexture = pixelTexture;
         this.materialTextureSampler = materialTextureSampler;
-        this.waterShaderEffect = waterShaderEffect;
     }
 
     public void Initialize(int initialSize)
@@ -58,8 +55,7 @@ class GameChunkPool
             sandWorld,
             worldTiles,
             physicsWorld,
-            materialTextureSampler,
-            waterShaderEffect
+            materialTextureSampler
         );
     }
 
