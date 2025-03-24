@@ -284,7 +284,12 @@ class FallingSandWorld
                 {
                     var worldPosition = new WorldPosition(x, y);
                     var pixel = GetPixel(worldPosition);
-                    if (pixel.Data.Material != Material.Empty)
+                    if (
+                        pixel.Data.Material != Material.Empty
+                        && !pixel.IsGas
+                        && !pixel.IsLiquid
+                        && !pixel.IsFire
+                    )
                     {
                         SetPixel(
                             worldPosition,
@@ -297,6 +302,10 @@ class FallingSandWorld
 
                         // Wake the chunk to ensure it is updated
                         WakeChunkAt(worldPosition);
+                    }
+                    else
+                    {
+                        pixel.Wake();
                     }
                 }
             }
