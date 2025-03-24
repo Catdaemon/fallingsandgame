@@ -4,6 +4,7 @@ using System.Linq;
 using Arch.Core;
 using FallingSand.FallingSandRenderer;
 using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Content;
 using Microsoft.Xna.Framework.Graphics;
 using nkast.Aether.Physics2D.Dynamics;
 using PhysicsWorld = nkast.Aether.Physics2D.Dynamics.World;
@@ -15,6 +16,9 @@ class SystemManager
 {
     private readonly World World;
     private readonly List<ISystem> Systems = [];
+    private RenderTarget2D screenTarget;
+    private SpriteBatch spriteBatch;
+    private GraphicsDevice graphicsDevice;
 
     public SystemManager(World world)
     {
@@ -25,7 +29,8 @@ class SystemManager
         PhysicsWorld physicsWorld,
         FallingSandWorld.FallingSandWorld sandWorld,
         GameWorld gameWorld,
-        GraphicsDevice graphicsDevice
+        GraphicsDevice graphicsDevice,
+        ContentManager contentManager
     )
     {
         AddSystem(new InputSystem(World));
@@ -39,12 +44,24 @@ class SystemManager
         AddSystem(new SandInteractionSystemSystem(World, sandWorld, gameWorld));
         AddSystem(new LifetimeSystem(World));
         AddSystem(new RenderSystem(World, graphicsDevice));
+        AddSystem(new WorldRenderSystem(gameWorld, graphicsDevice));
+        AddSystem(new LightingSystem(World, physicsWorld, graphicsDevice));
         AddSystem(new HudSystem(World, graphicsDevice));
 
-        foreach (var system in Systems)
-        {
-            system.Update(new GameTime(), 0);
-        }
+        screenTarget = new RenderTarget2D(
+            graphicsDevice,
+            graphicsDevice.PresentationParameters.BackBufferWidth,
+            graphicsDevice.PresentationParameters.BackBufferHeight
+        );
+        spriteBatch = new SpriteBatch(graphicsDevice);
+        this.graphicsDevice = graphicsDevice;
+
+        InitializeGraphics(graphicsDevice, contentManager);
+
+        // foreach (var system in Systems)
+        // {
+        //     system.Update(new GameTime(), 0);
+        // }
     }
 
     private void AddSystem(ISystem system)
@@ -62,17 +79,37 @@ class SystemManager
 
     public void Draw(GameTime gameTime, float deltaTime)
     {
+        graphicsDevice.SetRenderTarget(screenTarget);
+        graphicsDevice.Clear(Color.CornflowerBlue);
+
         foreach (var system in Systems)
         {
-            system.Draw(gameTime, deltaTime);
+            system.Draw(gameTime, deltaTime, screenTarget);
         }
+
+        // Set the render target to the back buffer
+        graphicsDevice.SetRenderTarget(null);
+        graphicsDevice.Clear(Color.Black);
+        spriteBatch.Begin();
+        spriteBatch.Draw(
+            screenTarget,
+            Vector2.Zero,
+            null,
+            Color.White,
+            0f,
+            Vector2.Zero,
+            1f,
+            SpriteEffects.None,
+            0f
+        );
+        spriteBatch.End();
     }
 
-    public void InitializeGraphics(GraphicsDevice graphicsDevice)
+    private void InitializeGraphics(GraphicsDevice graphicsDevice, ContentManager contentManager)
     {
         foreach (var system in Systems)
         {
-            system.InitializeGraphics(graphicsDevice);
+            system.InitializeGraphics(graphicsDevice, contentManager);
         }
     }
 }

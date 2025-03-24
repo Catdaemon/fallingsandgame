@@ -23,6 +23,8 @@ class CameraSystem : ISystem
 
     public void Update(GameTime gameTime, float deltaTime)
     {
+        Camera.Update(gameTime);
+
         if (Keyboard.GetState().IsKeyDown(Keys.Left))
         {
             offset.X -= 200 * deltaTime;

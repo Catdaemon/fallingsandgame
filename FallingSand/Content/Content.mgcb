@@ -63,6 +63,15 @@
 /processorParam:MakeSquare=False
 /build:bg_temp.png
 
+#begin Sprites/Lights/point.png
+/importer:TextureImporter
+/processor:TextureProcessor
+/processorParam:GenerateMipmaps=False
+/processorParam:PremultiplyAlpha=True
+/processorParam:ResizeToPowerOfTwo=False
+/processorParam:MakeSquare=False
+/build:Sprites/Lights/point.png
+
 #begin Shaders/WaterEffect.fx
 /importer:EffectImporter
 /processor:EffectProcessor

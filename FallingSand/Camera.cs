@@ -28,6 +28,23 @@ static class Camera
             && screenPos.Y < Size.Y;
     }
 
+    public static bool IsVisible(Vector2 physicsPosition, float radius)
+    {
+        // Convert physics position to world position
+        WorldPosition position = new WorldPosition(
+            (int)(physicsPosition.X * Constants.PIXELS_TO_METERS),
+            (int)(physicsPosition.Y * Constants.PIXELS_TO_METERS)
+        );
+
+        // Calculate the size of the bounding box
+        WorldPosition size = new WorldPosition(
+            (int)(radius * Constants.PIXELS_TO_METERS * 2),
+            (int)(radius * Constants.PIXELS_TO_METERS * 2)
+        );
+
+        return IsVisible(position, size);
+    }
+
     public static Vector2 WorldToScreenPosition(WorldPosition worldPosition)
     {
         // Convert world coordinates to screen coordinates

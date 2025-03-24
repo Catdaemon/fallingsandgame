@@ -28,5 +28,5 @@ class HudSystem : ISystem
 
     public void Update(GameTime gameTime, float deltaTime) { }
 
-    public void Draw(GameTime gameTime, float deltaTime) { }
+    public void Draw(GameTime gameTime, float deltaTime, RenderTarget2D screenTarget) { }
 }

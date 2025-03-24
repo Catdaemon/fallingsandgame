@@ -12,7 +12,6 @@ using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using nkast.Aether.Physics2D.Diagnostics;
-using nkast.Aether.Physics2D.Dynamics;
 
 namespace FallingSand;
 
@@ -67,7 +66,7 @@ public class Game1 : Game
             new WorldPosition(worldSizeX, worldSizeY)
         );
 
-        systemManager.RegisterSystems(physicsWorld, sandWorld, gameWorld, GraphicsDevice);
+        systemManager.RegisterSystems(physicsWorld, sandWorld, gameWorld, GraphicsDevice, Content);
 
         base.Initialize();
     }
@@ -83,8 +82,6 @@ public class Game1 : Game
         physicsDebugView.LoadContent(GraphicsDevice, Content);
 
         SpriteManager.Initialize(Content);
-
-        systemManager.InitializeGraphics(GraphicsDevice);
 
         var seed = "test seed";
         gameWorld.Init(seed, _spriteBatch, GraphicsDevice, physicsWorld, sandWorld, this);
@@ -103,6 +100,15 @@ public class Game1 : Game
         );
         weapon.Get<EquippableComponent>().IsActive = true;
         weapon.Get<EquippableComponent>().Parent = player;
+
+        var light = ecsWorld.Create(new PositionComponent() {
+            Position = new Vector2(Convert.PixelsToMeters(100), Convert.PixelsToMeters(-100)),
+        }, new LightComponent() {
+            Size = 100f,
+            Intensity = 1.0f,
+            Color = Color.White,
+            CastShadows = true,
+        });
     }
 
     protected override void Update(GameTime gameTime)
@@ -115,8 +121,6 @@ public class Game1 : Game
             || Keyboard.GetState().IsKeyDown(Keys.Escape)
         )
             Exit();
-
-        gameWorld.Update(gameTime);
 
         if (Mouse.GetState().RightButton == ButtonState.Pressed)
         {
@@ -172,7 +176,6 @@ public class Game1 : Game
         //     }
         // }
 
-        Camera.Update(gameTime);
         systemManager.Update(gameTime, deltaTime);
 
         FrameCounter.Update(gameTime);
@@ -189,7 +192,6 @@ public class Game1 : Game
         gameWorld.DrawRenderTargets();
 
         // Clear the screen between drawing the render targets and the rest
-        // Otherwise the background will be overwritten
         GraphicsDevice.Clear(Color.CornflowerBlue);
 
         // Draw our temp bg image
@@ -203,9 +205,7 @@ public class Game1 : Game
 
         systemManager.Draw(gameTime, deltaTime);
 
-        // Draw the render targets to the screen
-        gameWorld.Draw(gameTime);
-
+        // Draw debug view
         // try
         // {
         //     physicsDebugView.RenderDebugData(Camera.GetProjectionMatrix(), Camera.GetViewMatrix());
@@ -213,13 +213,9 @@ public class Game1 : Game
         // catch (IndexOutOfRangeException ex)
         // {
         //     Console.WriteLine($"Physics debug rendering error: {ex.Message}");
-        //     Console.WriteLine(
-        //         $"Polygon stats - Total: {PixelsToPolygons.TotalPolygons}, "
-        //             + $"Boxes: {PixelsToPolygons.BoxPolygons}, "
-        //             + $"Merged: {PixelsToPolygons.MergedPolygons}"
-        //     );
         // }
 
+        // Draw FPS counter on top
         _spriteBatch.Begin();
         FrameCounter.DrawFps(_spriteBatch, spriteFont, new Vector2(5, 5), Color.Yellow);
         _spriteBatch.End();

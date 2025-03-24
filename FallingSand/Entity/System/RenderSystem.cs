@@ -3,6 +3,7 @@ using Arch.Core.Extensions;
 using FallingSand;
 using FallingSand.Entity.Component;
 using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Content;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using nkast.Aether.Physics2D.Collision;
@@ -14,15 +15,17 @@ class RenderSystem : ISystem
     private readonly World World;
     private SpriteBatch spriteBatch;
     private Texture2D pixelTexture;
+    private readonly GraphicsDevice GraphicsDevice;
 
     public RenderSystem(World world, GraphicsDevice graphicsDevice)
     {
         World = world;
         pixelTexture = new Texture2D(graphicsDevice, 1, 1);
         pixelTexture.SetData([Color.White]);
+        GraphicsDevice = graphicsDevice;
     }
 
-    public void InitializeGraphics(GraphicsDevice graphicsDevice)
+    public void InitializeGraphics(GraphicsDevice graphicsDevice, ContentManager contentManager)
     {
         spriteBatch = new SpriteBatch(graphicsDevice);
     }
@@ -40,8 +43,9 @@ class RenderSystem : ISystem
         );
     }
 
-    public void Draw(GameTime gameTime, float deltaTime)
+    public void Draw(GameTime gameTime, float deltaTime, RenderTarget2D screenTarget)
     {
+        GraphicsDevice.SetRenderTarget(screenTarget);
         spriteBatch.Begin(transformMatrix: Camera.GetTransformMatrix());
         // Draw sprites
         var withSpriteQuery = new QueryDescription().WithAll<SpriteComponent, PositionComponent>();
