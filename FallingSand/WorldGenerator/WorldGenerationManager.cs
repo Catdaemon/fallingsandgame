@@ -101,11 +101,16 @@ class WorldGenerationManager
             int prefabHeight = prefab.Size[1];
 
             // Check if prefab is within world bounds
-            if (prefabX < 0 || prefabY < 0 || 
-                prefabX + prefabWidth > worldWidth || 
-                prefabY + prefabHeight > worldHeight)
+            if (
+                prefabX < 0
+                || prefabY < 0
+                || prefabX + prefabWidth > worldWidth
+                || prefabY + prefabHeight > worldHeight
+            )
             {
-                Console.WriteLine($"Warning: Prefab {prefab.Ref} is outside world bounds and will be partially or completely skipped");
+                Console.WriteLine(
+                    $"Warning: Prefab {prefab.Ref} is outside world bounds and will be partially or completely skipped"
+                );
                 continue;
             }
 
@@ -136,10 +141,15 @@ class WorldGenerationManager
                             int prefabPixelY = ty * IMAGE_SIZE + y;
 
                             // Make sure the coordinate is within the prefab image bounds
-                            if (prefabPixelX < prefab.PixelData.GetLength(0) && 
-                                prefabPixelY < prefab.PixelData.GetLength(1))
+                            if (
+                                prefabPixelX < prefab.PixelData.GetLength(0)
+                                && prefabPixelY < prefab.PixelData.GetLength(1)
+                            )
                             {
-                                tileData[y * IMAGE_SIZE + x] = prefab.PixelData[prefabPixelX, prefabPixelY];
+                                tileData[y * IMAGE_SIZE + x] = prefab.PixelData[
+                                    prefabPixelX,
+                                    prefabPixelY
+                                ];
                             }
                             else
                             {
@@ -149,9 +159,10 @@ class WorldGenerationManager
                     }
 
                     // Create a special TileDefinition for this prefab tile
-                    var prefabTileDefinition = new TileDefinition { 
+                    var prefabTileDefinition = new TileDefinition
+                    {
                         PixelData = tileData,
-                        Name = $"{prefab.Ref}_x{worldX}_y{worldY}"
+                        Name = $"{prefab.Ref}_x{worldX}_y{worldY}",
                     };
 
                     // Calculate edge hashes to ensure proper connections
@@ -163,7 +174,7 @@ class WorldGenerationManager
                         X = worldX,
                         Y = worldY,
                         Possibilities = [prefabTileDefinition],
-                        IsPrefabTile = true
+                        IsPrefabTile = true,
                     };
 
                     presetTiles.Add(prefabTile);
@@ -271,7 +282,10 @@ class WorldGenerationManager
                     }
 
                     // Update neighbor possibilities
-                    if (validNeighborPossibilities.Count < neighbor.Possibilities.Count && validNeighborPossibilities.Count > 0)
+                    if (
+                        validNeighborPossibilities.Count < neighbor.Possibilities.Count
+                        && validNeighborPossibilities.Count > 0
+                    )
                     {
                         neighbor.Possibilities = validNeighborPossibilities;
 

@@ -10,6 +10,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{89F6BF67-409
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Arch", "Arch\src\Arch\Arch.csproj", "{FCCBB5A1-B23A-4B37-954E-186D4C1028F7}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MonoChrome", "MonoChrome\MonoChrome.csproj", "{5889B1FE-39F6-4E5E-8834-B1256DADC9E9}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -24,6 +26,14 @@ Global
 		{FCCBB5A1-B23A-4B37-954E-186D4C1028F7}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{FCCBB5A1-B23A-4B37-954E-186D4C1028F7}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{FCCBB5A1-B23A-4B37-954E-186D4C1028F7}.Release|Any CPU.Build.0 = Release|Any CPU
+		{5B4F0BD3-6ED3-4C07-9451-B7D6AC607C38}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{5B4F0BD3-6ED3-4C07-9451-B7D6AC607C38}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{5B4F0BD3-6ED3-4C07-9451-B7D6AC607C38}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{5B4F0BD3-6ED3-4C07-9451-B7D6AC607C38}.Release|Any CPU.Build.0 = Release|Any CPU
+		{5889B1FE-39F6-4E5E-8834-B1256DADC9E9}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{5889B1FE-39F6-4E5E-8834-B1256DADC9E9}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{5889B1FE-39F6-4E5E-8834-B1256DADC9E9}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{5889B1FE-39F6-4E5E-8834-B1256DADC9E9}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

@@ -15,9 +15,6 @@ class SystemManager
 {
     private readonly World World;
     private readonly List<ISystem> Systems = [];
-    private ISystem PhysicsSystem;
-    private long lastUpdateTime = -1;
-    private const int updateInterval = 1000 / 60;
 
     public SystemManager(World world)
     {
@@ -33,8 +30,7 @@ class SystemManager
     {
         AddSystem(new InputSystem(World));
 
-        PhysicsSystem = new PhysicsSystem(World, physicsWorld);
-        AddSystem(PhysicsSystem);
+        AddSystem(new PhysicsSystem(World, physicsWorld));
 
         AddSystem(new KinematicMovementSystem(World));
         AddSystem(new WeaponSystem(World));
@@ -43,11 +39,11 @@ class SystemManager
         AddSystem(new SandInteractionSystemSystem(World, sandWorld, gameWorld));
         AddSystem(new LifetimeSystem(World));
         AddSystem(new RenderSystem(World, graphicsDevice));
-        AddSystem(new HUDSystem(World, graphicsDevice));
+        AddSystem(new HudSystem(World, graphicsDevice));
 
         foreach (var system in Systems)
         {
-            system.Update(new GameTime(TimeSpan.Zero, TimeSpan.Zero));
+            system.Update(new GameTime(), 0);
         }
     }
 
@@ -56,34 +52,19 @@ class SystemManager
         Systems.Add(system);
     }
 
-    public void Update(GameTime gameTime)
+    public void Update(GameTime gameTime, float deltaTime)
     {
-        // Update systems, except the physics system, at a fixed interval
-        // if (
-        //     lastUpdateTime != -1
-        //     && gameTime.TotalGameTime.TotalMilliseconds - lastUpdateTime < updateInterval
-        // )
-        // {
-        //     // Update the physics system as fast as possible
-        //     // var physicsSystem = Systems.First(system => system is PhysicsSystem);
-        //     // physicsSystem.Update(gameTime);
-        //     PhysicsSystem.Update(gameTime);
-        //     return;
-        // }
-
-        lastUpdateTime = (long)gameTime.TotalGameTime.TotalMilliseconds;
-
         foreach (var system in Systems)
         {
-            system.Update(gameTime);
+            system.Update(gameTime, deltaTime);
         }
     }
 
-    public void Draw(GameTime gameTime)
+    public void Draw(GameTime gameTime, float deltaTime)
     {
         foreach (var system in Systems)
         {
-            system.Draw(gameTime);
+            system.Draw(gameTime, deltaTime);
         }
     }
 

@@ -21,33 +21,31 @@ class CameraSystem : ISystem
     // private static QueryDescription WithFollowCameraQuery =
     //     new QueryDescription().WithAny<CameraFollowComponent>();
 
-    public void Update(GameTime gameTime)
+    public void Update(GameTime gameTime, float deltaTime)
     {
-        var delta = (float)gameTime.ElapsedGameTime.TotalSeconds;
-
         if (Keyboard.GetState().IsKeyDown(Keys.Left))
         {
-            offset.X -= 200 * delta;
+            offset.X -= 200 * deltaTime;
         }
         if (Keyboard.GetState().IsKeyDown(Keys.Right))
         {
-            offset.X += 200 * delta;
+            offset.X += 200 * deltaTime;
         }
         if (Keyboard.GetState().IsKeyDown(Keys.Up))
         {
-            offset.Y -= 200 * delta;
+            offset.Y -= 200 * deltaTime;
         }
         if (Keyboard.GetState().IsKeyDown(Keys.Down))
         {
-            offset.Y += 200 * delta;
+            offset.Y += 200 * deltaTime;
         }
         if (Keyboard.GetState().IsKeyDown(Keys.OemPlus))
         {
-            Camera.SetZoom(Camera.GetZoom() + 0.5f * delta);
+            Camera.SetZoom(Camera.GetZoom() + 0.5f * deltaTime);
         }
         if (Keyboard.GetState().IsKeyDown(Keys.OemMinus))
         {
-            Camera.SetZoom(Camera.GetZoom() - 0.5f * delta);
+            Camera.SetZoom(Camera.GetZoom() - 0.5f * deltaTime);
         }
 
         // Find entities with a Camera Follow component

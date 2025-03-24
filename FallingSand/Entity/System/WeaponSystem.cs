@@ -14,7 +14,7 @@ class WeaponSystem : ISystem
         World = world;
     }
 
-    public void Update(GameTime gameTime)
+    public void Update(GameTime gameTime, float deltaTime)
     {
         // A weapon has a factory component and an equippable component
         var query = new QueryDescription().WithAll<

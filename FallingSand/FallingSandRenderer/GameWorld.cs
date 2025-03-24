@@ -138,15 +138,18 @@ class GameWorld
         {
             for (int y = -1; y <= 1; y++)
             {
-                var offsetChunkPosition = new ChunkPosition(chunkPosition.X + x, chunkPosition.Y + y);
-             
+                var offsetChunkPosition = new ChunkPosition(
+                    chunkPosition.X + x,
+                    chunkPosition.Y + y
+                );
+
                 if (offsetChunkPosition.X < 0 || offsetChunkPosition.Y < 0)
                 {
                     continue;
                 }
-             
+
                 var chunk = GetOrCreateChunkFromChunkPosition(offsetChunkPosition);
-                
+
                 if (chunk != null)
                 {
                     chunk.ContainsEntities = true;
@@ -252,7 +255,8 @@ class GameWorld
                 continue;
             }
 
-            if (chunk.ContainsEntities) {
+            if (chunk.ContainsEntities)
+            {
                 asyncChunkPhysicsCalculator.Enqueue(chunk);
                 chunk.CreatePhysicsBodies();
             }

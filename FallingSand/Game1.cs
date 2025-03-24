@@ -38,6 +38,8 @@ public class Game1 : Game
     private readonly DebugView physicsDebugView;
     private Texture2D backgroundTempTexture;
 
+    public float gameSpeed = 1.0f;
+
     public Game1()
     {
         graphics = new(this)
@@ -105,6 +107,9 @@ public class Game1 : Game
 
     protected override void Update(GameTime gameTime)
     {
+        var deltaTime =
+            Math.Min((float)gameTime.ElapsedGameTime.TotalSeconds, 1f / 30f) * gameSpeed;
+
         if (
             GamePad.GetState(PlayerIndex.One).Buttons.Back == ButtonState.Pressed
             || Keyboard.GetState().IsKeyDown(Keys.Escape)
@@ -168,7 +173,7 @@ public class Game1 : Game
         // }
 
         Camera.Update(gameTime);
-        systemManager.Update(gameTime);
+        systemManager.Update(gameTime, deltaTime);
 
         FrameCounter.Update(gameTime);
 
@@ -177,6 +182,9 @@ public class Game1 : Game
 
     protected override void Draw(GameTime gameTime)
     {
+        var deltaTime =
+            Math.Min((float)gameTime.ElapsedGameTime.TotalSeconds, 1f / 30f) * gameSpeed;
+
         // Draw the game world to its render targets
         gameWorld.DrawRenderTargets();
 
@@ -193,7 +201,7 @@ public class Game1 : Game
         );
         _spriteBatch.End();
 
-        systemManager.Draw(gameTime);
+        systemManager.Draw(gameTime, deltaTime);
 
         // Draw the render targets to the screen
         gameWorld.Draw(gameTime);

@@ -50,7 +50,7 @@ class BulletSystem : ISystem
         bullet.HasCollided = false;
     }
 
-    public void Update(GameTime gameTime)
+    public void Update(GameTime gameTime, float deltaTime)
     {
         var query = new QueryDescription().WithAll<PositionComponent, BulletComponent>();
         World.Query(

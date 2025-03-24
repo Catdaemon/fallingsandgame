@@ -18,31 +18,35 @@ class SandInteractionSystemSystem : ISystem
     private readonly FallingSandWorld.FallingSandWorld SandWorld;
     private readonly GameWorld GameWorld;
 
-    public SandInteractionSystemSystem(World world, FallingSandWorld.FallingSandWorld sandWorld, GameWorld gameWorld)
+    public SandInteractionSystemSystem(
+        World world,
+        FallingSandWorld.FallingSandWorld sandWorld,
+        GameWorld gameWorld
+    )
     {
         World = world;
         SandWorld = sandWorld;
         GameWorld = gameWorld;
     }
 
-    public void Update(GameTime gameTime)
+    public void Update(GameTime gameTime, float deltaTime)
     {
         GameWorld.ResetOccupiedChunks();
 
         var presenceQuery = new QueryDescription().WithAll<PositionComponent>();
         World.Query(
             in presenceQuery,
-            (
-                Arch.Core.Entity entity,
-                ref PositionComponent positionComponent
-            ) =>
+            (Arch.Core.Entity entity, ref PositionComponent positionComponent) =>
             {
                 var position = positionComponent.Position;
                 GameWorld.SetChunkOccupiedAt(position);
             }
         );
 
-        var pixelReaderQuery = new QueryDescription().WithAll<SandPixelReaderComponent, PositionComponent>();
+        var pixelReaderQuery = new QueryDescription().WithAll<
+            SandPixelReaderComponent,
+            PositionComponent
+        >();
         World.Query(
             in pixelReaderQuery,
             (

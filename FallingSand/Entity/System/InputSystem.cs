@@ -44,7 +44,7 @@ class InputSystem : ISystem
         World = world;
     }
 
-    public void Update(GameTime gameTime)
+    public void Update(GameTime gameTime, float deltaTime)
     {
         ZeroState();
 

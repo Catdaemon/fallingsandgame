@@ -9,12 +9,12 @@ using nkast.Aether.Physics2D.Collision;
 
 namespace FallingSand.Entity.System;
 
-class HudSystem : ISystem
+class LightingSystem : ISystem
 {
     private readonly World World;
     private SpriteBatch spriteBatch;
 
-    public HudSystem(World world, GraphicsDevice graphicsDevice)
+    public LightingSystem(World world, GraphicsDevice graphicsDevice)
     {
         World = world;
 

@@ -6,6 +6,6 @@ namespace FallingSand.Entity.System;
 public interface ISystem
 {
     public void InitializeGraphics(GraphicsDevice graphicsDevice) { }
-    public void Update(GameTime gameTime);
-    public void Draw(GameTime gameTime) { }
+    public void Update(GameTime gameTime, float deltaTime);
+    public void Draw(GameTime gameTime, float deltaTime) { }
 }

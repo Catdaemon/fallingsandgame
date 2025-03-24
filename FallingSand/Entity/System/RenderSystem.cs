@@ -27,7 +27,7 @@ class RenderSystem : ISystem
         spriteBatch = new SpriteBatch(graphicsDevice);
     }
 
-    public void Update(GameTime gameTime)
+    public void Update(GameTime gameTime, float deltaTime)
     {
         // Update all sprites
         var withSpriteQuery = new QueryDescription().WithAny<SpriteComponent>();
@@ -40,7 +40,7 @@ class RenderSystem : ISystem
         );
     }
 
-    public void Draw(GameTime gameTime)
+    public void Draw(GameTime gameTime, float deltaTime)
     {
         spriteBatch.Begin(transformMatrix: Camera.GetTransformMatrix());
         // Draw sprites

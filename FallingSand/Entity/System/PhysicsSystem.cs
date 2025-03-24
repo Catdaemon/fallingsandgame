@@ -288,7 +288,7 @@ class PhysicsSystem : ISystem
         ECSWorld.InlineQuery<CreatePhysicsBody>(in createPhysicsBodyQuery, ref queryObject);
     }
 
-    public void Update(GameTime gameTime)
+    public void Update(GameTime gameTime, float deltaTime)
     {
         CreatePhysicsBodies();
 
@@ -361,6 +361,6 @@ class PhysicsSystem : ISystem
                 }
             }
         );
-        PhysicsWorld.Step(Math.Min((float)gameTime.ElapsedGameTime.TotalSeconds, 1f / 30f));
+        PhysicsWorld.Step(deltaTime);
     }
 }

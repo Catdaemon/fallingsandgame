@@ -58,10 +58,8 @@ class KinematicMovementSystem : ISystem
         return hit;
     }
 
-    public void Update(GameTime gameTime)
+    public void Update(GameTime gameTime, float deltaTime)
     {
-        float delta = (float)gameTime.ElapsedGameTime.TotalSeconds;
-
         // Find entities with the necessary components
         var query = new QueryDescription().WithAll<
             PhysicsBodyComponent,
@@ -111,7 +109,6 @@ class KinematicMovementSystem : ISystem
 
                 // Track if we found downhill terrain ahead
                 bool downhillAhead = false;
-                Vector2 downhillNormal = Vector2.UnitY;
                 float downhillDistance = float.MaxValue;
 
                 // Use multiple raycasts spread across the bottom of the body
@@ -166,7 +163,6 @@ class KinematicMovementSystem : ISystem
                             if (forwardNormal.Y < 0 && forwardDistance < downhillDistance)
                             {
                                 downhillAhead = true;
-                                downhillNormal = forwardNormal;
                                 downhillDistance = forwardDistance;
                             }
                         }
@@ -339,8 +335,8 @@ class KinematicMovementSystem : ISystem
                     {
                         if (inputState.Value.Jump && jetpack.Fuel > 0)
                         {
-                            jetpack.Fuel -= 1f * delta;
-                            yVelocity -= 20f * delta;
+                            jetpack.Fuel -= 1f * deltaTime;
+                            yVelocity -= 20f * deltaTime;
 
                             var spawnParticle = random.Next(0, 2) == 0;
                             if (spawnParticle)

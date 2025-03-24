@@ -20,7 +20,7 @@ class LifetimeSystem : ISystem
         World = world;
     }
 
-    public void Update(GameTime gameTime)
+    public void Update(GameTime gameTime, float deltaTime)
     {
         var query = new QueryDescription().WithAll<LifetimeComponent>();
         World.Query(
