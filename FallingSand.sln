@@ -10,8 +10,6 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{89F6BF67-409
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Arch", "Arch\src\Arch\Arch.csproj", "{FCCBB5A1-B23A-4B37-954E-186D4C1028F7}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MonoChrome", "MonoChrome\MonoChrome.csproj", "{5889B1FE-39F6-4E5E-8834-B1256DADC9E9}"
-EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU

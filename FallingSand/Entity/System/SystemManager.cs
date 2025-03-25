@@ -85,24 +85,7 @@ class SystemManager
         foreach (var system in Systems)
         {
             system.Draw(gameTime, deltaTime, screenTarget);
-        }
-
-        // Set the render target to the back buffer
-        graphicsDevice.SetRenderTarget(null);
-        graphicsDevice.Clear(Color.Black);
-        spriteBatch.Begin();
-        spriteBatch.Draw(
-            screenTarget,
-            Vector2.Zero,
-            null,
-            Color.White,
-            0f,
-            Vector2.Zero,
-            1f,
-            SpriteEffects.None,
-            0f
-        );
-        spriteBatch.End();
+        }        
     }
 
     private void InitializeGraphics(GraphicsDevice graphicsDevice, ContentManager contentManager)

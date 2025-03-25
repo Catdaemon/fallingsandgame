@@ -27,7 +27,8 @@ class LightingSystem : ISystem
     private RenderTarget2D sceneTarget;
     private RenderTarget2D shadowTarget;
     private const int TextureSize = 512;
-    
+    private Effect lightingEffect;
+
     public LightingSystem(World world, PhysicsWorld physicsWorld, GraphicsDevice graphicsDevice)
     {
         World = world;
@@ -45,6 +46,10 @@ class LightingSystem : ISystem
         lightTarget = new RenderTarget2D(graphicsDevice, pp.BackBufferWidth, pp.BackBufferHeight);
         sceneTarget = new RenderTarget2D(graphicsDevice, pp.BackBufferWidth, pp.BackBufferHeight);
         shadowTarget = new RenderTarget2D(graphicsDevice, pp.BackBufferWidth, pp.BackBufferHeight);
+
+        // Load lighting effect
+        lightingEffect = contentManager.Load<Effect>("Shaders/LightBlend");
+        lightingEffect.Parameters["LightMap"].SetValue(lightTarget);
 
         // Create point light texture
         pointLightTexture = new Texture2D(graphicsDevice, TextureSize, TextureSize);
@@ -67,7 +72,7 @@ class LightingSystem : ISystem
     public void Update(GameTime gameTime, float deltaTime) { }
 
     public void Draw(GameTime gameTime, float deltaTime, RenderTarget2D screenTarget)
-    {        
+    {
         // Fix 1: Ensure render targets are cleared properly
         // Clear the render targets before drawing to them
         GraphicsDevice.SetRenderTarget(sceneTarget);
@@ -84,11 +89,11 @@ class LightingSystem : ISystem
         spriteBatch.Begin();
         spriteBatch.Draw(screenTarget, Vector2.Zero, Color.White);
         spriteBatch.End();
-        
+
         // Clear the screen target to black (for darkness)
         GraphicsDevice.SetRenderTarget(screenTarget);
         GraphicsDevice.Clear(Color.Black);
-        
+
         // Draw the scene with ambient light level
         spriteBatch.Begin(SpriteSortMode.Immediate, BlendState.Opaque);
         spriteBatch.Draw(sceneTarget, Vector2.Zero, Color.White);
@@ -97,7 +102,7 @@ class LightingSystem : ISystem
         // Generate shadow mask
         GraphicsDevice.SetRenderTarget(shadowTarget);
         GraphicsDevice.Clear(Color.White); // White = no shadow
-        
+
         var proj = Camera.GetProjectionMatrix();
         var view = Camera.GetViewMatrix();
         var world = Matrix.Identity;
@@ -122,39 +127,80 @@ class LightingSystem : ISystem
             }
         }
         primitiveBatch.End();
-        
+
         // Render lights to the light target
         GraphicsDevice.SetRenderTarget(lightTarget);
         GraphicsDevice.Clear(Color.Black);
-        
-      
+
         // Plain additive lights without shadows
-        spriteBatch.Begin(SpriteSortMode.Immediate, BlendState.Additive, null, null, null, null, Camera.GetTransformMatrix());
-        
+        spriteBatch.Begin(
+            SpriteSortMode.Immediate,
+            BlendState.Additive,
+            null,
+            null,
+            null,
+            null,
+            Camera.GetTransformMatrix()
+        );
+
         // Draw all entity lights
         var withLightQuery = new QueryDescription().WithAll<LightComponent, PositionComponent>();
-        World.Query(in withLightQuery, (Arch.Core.Entity entity, ref LightComponent light, ref PositionComponent position) =>
-        {
-            Vector2 worldPos = new Vector2(position.Position.X, position.Position.Y);
-            
-            spriteBatch.Draw(
-                pointLightTexture,
-                worldPos,
-                null,
-                light.Color * light.Intensity,
-                0f,
-                new Vector2(pointLightTexture.Width / 2, pointLightTexture.Height / 2),
-                light.Size * 2 / TextureSize,
-                SpriteEffects.None,
-                0
-            );
-        });
-        
+        World.Query(
+            in withLightQuery,
+            (Arch.Core.Entity entity, ref LightComponent light, ref PositionComponent position) =>
+            {
+                Vector2 worldPos = new Vector2(position.Position.X, position.Position.Y);
+
+                spriteBatch.Draw(
+                    pointLightTexture,
+                    worldPos,
+                    null,
+                    light.Color * light.Intensity,
+                    0f,
+                    new Vector2(pointLightTexture.Width / 2, pointLightTexture.Height / 2),
+                    light.Size * 2 / TextureSize,
+                    SpriteEffects.None,
+                    0
+                );
+            }
+        );
+
         spriteBatch.End();
-        
-        GraphicsDevice.SetRenderTarget(screenTarget);
-        spriteBatch.Begin(SpriteSortMode.Immediate, BlendState.AlphaBlend);
-        spriteBatch.Draw(lightTarget, Vector2.Zero, Color.White);
+
+        GraphicsDevice.SetRenderTarget(null);
+        GraphicsDevice.Clear(Color.CornflowerBlue);
+
+        // Debug draw the render targets
+        spriteBatch.Begin();
+        spriteBatch.Draw(
+            sceneTarget,
+            new Rectangle(0, 0, sceneTarget.Width / 2, sceneTarget.Height / 2),
+            Color.White
+        );
+        spriteBatch.Draw(
+            shadowTarget,
+            new Rectangle(sceneTarget.Width / 2, 0, sceneTarget.Width / 2, sceneTarget.Height / 2),
+            Color.White
+        );
+        spriteBatch.Draw(
+            lightTarget,
+            new Rectangle(0, sceneTarget.Height / 2, sceneTarget.Width / 2, sceneTarget.Height / 2),
+            Color.White
+        );
+        spriteBatch.End();
+
+        spriteBatch.Begin(effect: lightingEffect);
+        // bottom right
+        spriteBatch.Draw(
+            screenTarget,
+            new Rectangle(
+                sceneTarget.Width / 2,
+                sceneTarget.Height / 2,
+                sceneTarget.Width / 2,
+                sceneTarget.Height / 2
+            ),
+            Color.White
+        );
         spriteBatch.End();
     }
 
@@ -186,7 +232,9 @@ class LightingSystem : ISystem
     {
         if (!primitiveBatch.IsReady())
         {
-            throw new InvalidOperationException("BeginCustomDraw must be called before drawing anything.");
+            throw new InvalidOperationException(
+                "BeginCustomDraw must be called before drawing anything."
+            );
         }
 
         if (count == 2)

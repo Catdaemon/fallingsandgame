@@ -79,4 +79,9 @@
 /processorParam:PreprocessMode=PassThrough
 /build:Shaders/WaterEffect.fx
 
-
+#begin Shaders/LightBlend.fx
+/importer:EffectImporter
+/processor:EffectProcessor
+/processorParam:DebugMode=Auto
+/processorParam:PreprocessMode=PassThrough
+/build:Shaders/LightBlend.fx
