@@ -24,7 +24,7 @@ class LightingSystem : ISystem
     private readonly GraphicsDevice GraphicsDevice;
     private Texture2D pointLightTexture;
     private RenderTarget2D lightTarget;
-    private RenderTarget2D sceneTarget;
+    private RenderTarget2D individualLightTarget;
     private RenderTarget2D shadowTarget;
     private const int TextureSize = 512;
     private Effect lightingEffect;
@@ -43,9 +43,36 @@ class LightingSystem : ISystem
 
         // Create render targets
         var pp = graphicsDevice.PresentationParameters;
-        lightTarget = new RenderTarget2D(graphicsDevice, pp.BackBufferWidth, pp.BackBufferHeight);
-        sceneTarget = new RenderTarget2D(graphicsDevice, pp.BackBufferWidth, pp.BackBufferHeight);
-        shadowTarget = new RenderTarget2D(graphicsDevice, pp.BackBufferWidth, pp.BackBufferHeight);
+        lightTarget = new RenderTarget2D(
+            graphicsDevice,
+            pp.BackBufferWidth,
+            pp.BackBufferHeight,
+            false,
+            SurfaceFormat.Color,
+            DepthFormat.None,
+            0,
+            RenderTargetUsage.PreserveContents
+        );
+        shadowTarget = new RenderTarget2D(
+            graphicsDevice,
+            pp.BackBufferWidth,
+            pp.BackBufferHeight,
+            false,
+            SurfaceFormat.Color,
+            DepthFormat.None,
+            0,
+            RenderTargetUsage.PreserveContents
+        );
+        individualLightTarget = new RenderTarget2D(
+            graphicsDevice,
+            pp.BackBufferWidth,
+            pp.BackBufferHeight,
+            false,
+            SurfaceFormat.Color,
+            DepthFormat.None,
+            0,
+            RenderTargetUsage.PreserveContents
+        );
 
         // Load lighting effect
         lightingEffect = contentManager.Load<Effect>("Shaders/LightBlend");
@@ -62,7 +89,7 @@ class LightingSystem : ISystem
             {
                 float distance = Vector2.Distance(new Vector2(x, y), center);
                 float intensity = Math.Max(0, 1 - (distance / (TextureSize / 2f)));
-                intensity = intensity * intensity; // Square for more realistic falloff
+                intensity = intensity * intensity;
                 colors[x + y * TextureSize] = Color.White * intensity;
             }
         }
@@ -75,29 +102,16 @@ class LightingSystem : ISystem
     {
         // Fix 1: Ensure render targets are cleared properly
         // Clear the render targets before drawing to them
-        GraphicsDevice.SetRenderTarget(sceneTarget);
-        GraphicsDevice.Clear(Color.Transparent);
-
         GraphicsDevice.SetRenderTarget(shadowTarget);
         GraphicsDevice.Clear(Color.White);
 
         GraphicsDevice.SetRenderTarget(lightTarget);
         GraphicsDevice.Clear(Color.Black);
 
-        // Save original scene to our scene target
-        GraphicsDevice.SetRenderTarget(sceneTarget);
-        spriteBatch.Begin();
-        spriteBatch.Draw(screenTarget, Vector2.Zero, Color.White);
-        spriteBatch.End();
-
-        // Clear the screen target to black (for darkness)
-        GraphicsDevice.SetRenderTarget(screenTarget);
-        GraphicsDevice.Clear(Color.Black);
-
         // Draw the scene with ambient light level
-        spriteBatch.Begin(SpriteSortMode.Immediate, BlendState.Opaque);
-        spriteBatch.Draw(sceneTarget, Vector2.Zero, Color.White);
-        spriteBatch.End();
+        // spriteBatch.Begin(SpriteSortMode.Immediate, BlendState.Opaque);
+        // spriteBatch.Draw(sceneTarget, Vector2.Zero, Color.White);
+        // spriteBatch.End();
 
         // Generate shadow mask
         GraphicsDevice.SetRenderTarget(shadowTarget);
@@ -107,13 +121,7 @@ class LightingSystem : ISystem
         var view = Camera.GetViewMatrix();
         var world = Matrix.Identity;
 
-        // Fix 5: Validate camera matrices
-        if (proj == Matrix.Identity || view == Matrix.Identity)
-        {
-            throw new InvalidOperationException("Camera matrices are not properly initialized.");
-        }
-
-        // Draw physics bodies as black shadows
+        // Draw physics bodies as black shadows on the shadow target
         primitiveBatch.Begin(ref proj, ref view, ref world);
         foreach (var body in PhysicsWorld.BodyList)
         {
@@ -128,29 +136,28 @@ class LightingSystem : ISystem
         }
         primitiveBatch.End();
 
-        // Render lights to the light target
-        GraphicsDevice.SetRenderTarget(lightTarget);
-        GraphicsDevice.Clear(Color.Black);
-
-        // Plain additive lights without shadows
-        spriteBatch.Begin(
-            SpriteSortMode.Immediate,
-            BlendState.Additive,
-            null,
-            null,
-            null,
-            null,
-            Camera.GetTransformMatrix()
-        );
-
         // Draw all entity lights
         var withLightQuery = new QueryDescription().WithAll<LightComponent, PositionComponent>();
         World.Query(
             in withLightQuery,
             (Arch.Core.Entity entity, ref LightComponent light, ref PositionComponent position) =>
             {
-                Vector2 worldPos = new Vector2(position.Position.X, position.Position.Y);
+                Vector2 worldPos = new(position.Position.X, position.Position.Y);
 
+                // Set up the render target for this light
+                GraphicsDevice.SetRenderTarget(individualLightTarget);
+                GraphicsDevice.Clear(Color.Black);
+
+                // Draw the light to the individual light target
+                spriteBatch.Begin(
+                    SpriteSortMode.Immediate,
+                    BlendState.Opaque,
+                    null,
+                    null,
+                    null,
+                    null,
+                    Camera.GetTransformMatrix()
+                );
                 spriteBatch.Draw(
                     pointLightTexture,
                     worldPos,
@@ -162,10 +169,17 @@ class LightingSystem : ISystem
                     SpriteEffects.None,
                     0
                 );
+                spriteBatch.End();
+
+                // TODO: Draw the shadows over the light
+
+                // Add the finished light to the light target
+                GraphicsDevice.SetRenderTarget(lightTarget);
+                spriteBatch.Begin(SpriteSortMode.Immediate, BlendState.Additive);
+                spriteBatch.Draw(individualLightTarget, Vector2.Zero, Color.White);
+                spriteBatch.End();
             }
         );
-
-        spriteBatch.End();
 
         GraphicsDevice.SetRenderTarget(null);
         GraphicsDevice.Clear(Color.CornflowerBlue);
@@ -173,18 +187,28 @@ class LightingSystem : ISystem
         // Debug draw the render targets
         spriteBatch.Begin();
         spriteBatch.Draw(
-            sceneTarget,
-            new Rectangle(0, 0, sceneTarget.Width / 2, sceneTarget.Height / 2),
+            screenTarget,
+            new Rectangle(0, 0, screenTarget.Width / 2, screenTarget.Height / 2),
             Color.White
         );
         spriteBatch.Draw(
             shadowTarget,
-            new Rectangle(sceneTarget.Width / 2, 0, sceneTarget.Width / 2, sceneTarget.Height / 2),
+            new Rectangle(
+                screenTarget.Width / 2,
+                0,
+                screenTarget.Width / 2,
+                screenTarget.Height / 2
+            ),
             Color.White
         );
         spriteBatch.Draw(
             lightTarget,
-            new Rectangle(0, sceneTarget.Height / 2, sceneTarget.Width / 2, sceneTarget.Height / 2),
+            new Rectangle(
+                0,
+                screenTarget.Height / 2,
+                screenTarget.Width / 2,
+                screenTarget.Height / 2
+            ),
             Color.White
         );
         spriteBatch.End();
@@ -194,10 +218,10 @@ class LightingSystem : ISystem
         spriteBatch.Draw(
             screenTarget,
             new Rectangle(
-                sceneTarget.Width / 2,
-                sceneTarget.Height / 2,
-                sceneTarget.Width / 2,
-                sceneTarget.Height / 2
+                screenTarget.Width / 2,
+                screenTarget.Height / 2,
+                screenTarget.Width / 2,
+                screenTarget.Height / 2
             ),
             Color.White
         );
@@ -213,7 +237,6 @@ class LightingSystem : ISystem
                 PolygonShape polygonShape = (PolygonShape)fixture.Shape;
                 int count = polygonShape.Vertices.Count;
 
-                // Convert to pixels
                 Vector2[] tempVertices = new Vector2[count];
                 for (int j = 0; j < count; j++)
                 {
@@ -254,7 +277,6 @@ class LightingSystem : ISystem
     {
         pointLightTexture?.Dispose();
         lightTarget?.Dispose();
-        sceneTarget?.Dispose();
         shadowTarget?.Dispose();
     }
 }

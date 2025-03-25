@@ -1,10 +1,10 @@
 // Basic lighting pixel shader
-texture SceneTexture : register(t1);
+texture SceneTexture : register(t0);
 sampler2D SceneTextureSampler = sampler_state {
     Texture = <SceneTexture>;
 };
 
-texture LightMap : register(t0);
+texture LightMap : register(t1);
 sampler2D LightMapSampler = sampler_state {
     Texture = <LightMap>;
 };

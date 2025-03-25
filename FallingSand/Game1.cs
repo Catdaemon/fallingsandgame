@@ -88,27 +88,25 @@ public class Game1 : Game
 
         base.LoadContent();
 
-        var player = ecsWorld.CreatePlayer(
-            new Vector2(Convert.PixelsToMeters(100), Convert.PixelsToMeters(-100))
+        var light = ecsWorld.Create(
+            new PositionComponent() { Position = new Vector2(100, 100) },
+            new LightComponent()
+            {
+                Size = 500f,
+                Intensity = 1.0f,
+                Color = Color.White,
+                CastShadows = true,
+            }
         );
-        ecsWorld.CreateChest(
-            new Vector2(Convert.PixelsToMeters(220), Convert.PixelsToMeters(-100))
-        );
+
+        var player = ecsWorld.CreatePlayer(new Vector2(400, 100));
+        ecsWorld.CreateChest(new Vector2(200, 100));
         var weapon = ecsWorld.CreateWeapon(
             new Vector2(Convert.PixelsToMeters(300), Convert.PixelsToMeters(-100)),
             WeaponType.Pistol
         );
         weapon.Get<EquippableComponent>().IsActive = true;
         weapon.Get<EquippableComponent>().Parent = player;
-
-        var light = ecsWorld.Create(new PositionComponent() {
-            Position = new Vector2(Convert.PixelsToMeters(100), Convert.PixelsToMeters(-100)),
-        }, new LightComponent() {
-            Size = 100f,
-            Intensity = 1.0f,
-            Color = Color.White,
-            CastShadows = true,
-        });
     }
 
     protected override void Update(GameTime gameTime)

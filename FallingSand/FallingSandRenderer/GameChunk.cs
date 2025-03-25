@@ -62,7 +62,7 @@ class GameChunk
             Constants.CHUNK_HEIGHT,
             false,
             SurfaceFormat.Color,
-            DepthFormat.Depth24, // Use depth buffer
+            DepthFormat.None,
             0,
             RenderTargetUsage.PreserveContents
         );
@@ -119,6 +119,13 @@ class GameChunk
         }
 
         SandChunk = SandWorld.GetOrCreateChunkFromWorldPosition(WorldOrigin);
+
+        if (SandChunk == null)
+        {
+            // TODO: investigate why this happens
+            return;
+        }
+
         SandChunk.Sleep();
 
         if (initialGeneration)
