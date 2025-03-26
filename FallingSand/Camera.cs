@@ -56,6 +56,11 @@ static class Camera
         return (worldPos - PositionF) * Zoom + screenCenter;
     }
 
+    public static Vector2 WorldToScreenPosition(Vector2 worldPosition)
+    {
+        return WorldToScreenPosition(new WorldPosition((int)worldPosition.X, (int)worldPosition.Y));
+    }
+
     public static WorldPosition ScreenToWorldPosition(Vector2 screenPosition)
     {
         // Convert screen coordinates to world coordinates

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Arch.Core;
 using Arch.Core.Extensions;
 using FallingSand;
@@ -29,6 +30,13 @@ class LightingSystem : ISystem
     private const int TextureSize = 512;
     private Effect lightingEffect;
 
+    // Custom blend state for multiply effect
+    private BlendState multiplyBlend;
+
+    // Shadow projection parameters
+    private const float ShadowLength = 2000.0f; // Maximum shadow length in pixels
+    private Color ShadowColor = Color.Black; // Solid black shadow
+
     public LightingSystem(World world, PhysicsWorld physicsWorld, GraphicsDevice graphicsDevice)
     {
         World = world;
@@ -40,6 +48,18 @@ class LightingSystem : ISystem
     {
         spriteBatch = new SpriteBatch(graphicsDevice);
         primitiveBatch = new PrimitiveBatch(graphicsDevice);
+
+        // Create custom multiply blend state
+        multiplyBlend = new BlendState
+        {
+            ColorSourceBlend = Blend.DestinationColor,
+            ColorDestinationBlend = Blend.Zero,
+            ColorBlendFunction = BlendFunction.Add,
+
+            AlphaSourceBlend = Blend.DestinationAlpha,
+            AlphaDestinationBlend = Blend.Zero,
+            AlphaBlendFunction = BlendFunction.Add,
+        };
 
         // Create render targets
         var pp = graphicsDevice.PresentationParameters;
@@ -100,49 +120,18 @@ class LightingSystem : ISystem
 
     public void Draw(GameTime gameTime, float deltaTime, RenderTarget2D screenTarget)
     {
-        // Fix 1: Ensure render targets are cleared properly
-        // Clear the render targets before drawing to them
-        GraphicsDevice.SetRenderTarget(shadowTarget);
-        GraphicsDevice.Clear(Color.White);
-
+        // Clear the render targets
         GraphicsDevice.SetRenderTarget(lightTarget);
         GraphicsDevice.Clear(Color.Black);
 
-        // Draw the scene with ambient light level
-        // spriteBatch.Begin(SpriteSortMode.Immediate, BlendState.Opaque);
-        // spriteBatch.Draw(sceneTarget, Vector2.Zero, Color.White);
-        // spriteBatch.End();
-
-        // Generate shadow mask
-        GraphicsDevice.SetRenderTarget(shadowTarget);
-        GraphicsDevice.Clear(Color.White); // White = no shadow
-
-        var proj = Camera.GetProjectionMatrix();
-        var view = Camera.GetViewMatrix();
-        var world = Matrix.Identity;
-
-        // Draw physics bodies as black shadows on the shadow target
-        primitiveBatch.Begin(ref proj, ref view, ref world);
-        foreach (var body in PhysicsWorld.BodyList)
-        {
-            Transform transform = body.GetTransform();
-            foreach (var fixture in body.FixtureList)
-            {
-                if (fixture.Shape is PolygonShape)
-                {
-                    DrawShape(fixture, transform, Color.Black);
-                }
-            }
-        }
-        primitiveBatch.End();
-
-        // Draw all entity lights
+        // Draw all entity lights with shadows
         var withLightQuery = new QueryDescription().WithAll<LightComponent, PositionComponent>();
         World.Query(
             in withLightQuery,
             (Arch.Core.Entity entity, ref LightComponent light, ref PositionComponent position) =>
             {
                 Vector2 worldPos = new(position.Position.X, position.Position.Y);
+                Vector2 screenPos = Camera.WorldToScreenPosition(worldPos);
 
                 // Set up the render target for this light
                 GraphicsDevice.SetRenderTarget(individualLightTarget);
@@ -171,7 +160,47 @@ class LightingSystem : ISystem
                 );
                 spriteBatch.End();
 
-                // TODO: Draw the shadows over the light
+                // Prepare to draw shadow polygons
+                GraphicsDevice.SetRenderTarget(shadowTarget);
+                GraphicsDevice.Clear(Color.White); // White = no shadow
+
+                // Set up the matrices for primitive batch
+                var proj = Matrix.CreateOrthographicOffCenter(
+                    0,
+                    GraphicsDevice.Viewport.Width,
+                    GraphicsDevice.Viewport.Height,
+                    0,
+                    0,
+                    1
+                );
+                var view = Matrix.Identity;
+                var world = Matrix.Identity;
+
+                // Begin drawing shadow casters
+                primitiveBatch.Begin(ref proj, ref view, ref world);
+
+                // Process each physics body for shadow casting
+                foreach (var body in PhysicsWorld.BodyList)
+                {
+                    Transform transform = body.GetTransform();
+
+                    foreach (var fixture in body.FixtureList)
+                    {
+                        if (fixture.Shape is PolygonShape polygonShape)
+                        {
+                            // Process vertices and cast shadows
+                            ProjectShadowPolygon(polygonShape, transform, screenPos);
+                        }
+                    }
+                }
+
+                primitiveBatch.End();
+
+                // Apply the shadow mask to the light
+                GraphicsDevice.SetRenderTarget(individualLightTarget);
+                spriteBatch.Begin(SpriteSortMode.Immediate, multiplyBlend);
+                spriteBatch.Draw(shadowTarget, Vector2.Zero, Color.White);
+                spriteBatch.End();
 
                 // Add the finished light to the light target
                 GraphicsDevice.SetRenderTarget(lightTarget);
@@ -228,49 +257,84 @@ class LightingSystem : ISystem
         spriteBatch.End();
     }
 
-    void DrawShape(Fixture fixture, Transform transform, Color color)
+    private void ProjectShadowPolygon(
+        PolygonShape polygonShape,
+        Transform transform,
+        Vector2 lightScreenPos
+    )
     {
-        switch (fixture.Shape.ShapeType)
+        int vertexCount = polygonShape.Vertices.Count;
+        if (vertexCount < 3)
+            return;
+
+        // Transform polygon vertices to screen space
+        List<Vector2> screenVertices = new List<Vector2>(vertexCount);
+        for (int i = 0; i < vertexCount; i++)
         {
-            case ShapeType.Polygon:
+            Vector2 worldVertex = Transform.Multiply(polygonShape.Vertices[i], ref transform);
+            // Convert physics world vertex to screen space
+            worldVertex = worldVertex * Constants.PIXELS_TO_METERS;
+            Vector2 screenVertex = Camera.WorldToScreenPosition(
+                new Vector2(worldVertex.X, worldVertex.Y)
+            );
+            screenVertices.Add(screenVertex);
+        }
+
+        // Process each edge of the polygon for shadow casting
+        for (int i = 0; i < vertexCount; i++)
+        {
+            int j = (i + 1) % vertexCount;
+
+            Vector2 v1 = screenVertices[i];
+            Vector2 v2 = screenVertices[j];
+
+            // Calculate edge normal (perpendicular to edge, pointing outward)
+            Vector2 edge = v2 - v1;
+            Vector2 normal = new Vector2(-edge.Y, edge.X);
+            normal.Normalize();
+
+            // Calculate direction from light to edge midpoint
+            Vector2 midPoint = (v1 + v2) * 0.5f;
+            Vector2 lightToMid = midPoint - lightScreenPos;
+
+            // If the edge is facing away from the light, cast a shadow
+            // Dot product between normal and light-to-mid vector determines this
+            if (Vector2.Dot(normal, lightToMid) > 0)
             {
-                PolygonShape polygonShape = (PolygonShape)fixture.Shape;
-                int count = polygonShape.Vertices.Count;
+                // Project vertices away from light
+                Vector2 v1Proj = ProjectVertex(v1, lightScreenPos);
+                Vector2 v2Proj = ProjectVertex(v2, lightScreenPos);
 
-                Vector2[] tempVertices = new Vector2[count];
-                for (int j = 0; j < count; j++)
-                {
-                    tempVertices[j] = Transform.Multiply(polygonShape.Vertices[j], ref transform);
-                }
+                // First triangle: v1, v2, v1Proj
+                primitiveBatch.AddVertex(ref v1, ShadowColor, PrimitiveType.TriangleList);
+                primitiveBatch.AddVertex(ref v2, ShadowColor, PrimitiveType.TriangleList);
+                primitiveBatch.AddVertex(ref v2Proj, ShadowColor, PrimitiveType.TriangleList);
 
-                DrawSolidPolygon(tempVertices, count, color);
-                break;
+                // Second triangle: v1, v1Proj, v2Proj
+                primitiveBatch.AddVertex(ref v1, ShadowColor, PrimitiveType.TriangleList);
+                primitiveBatch.AddVertex(ref v2Proj, ShadowColor, PrimitiveType.TriangleList);
+                primitiveBatch.AddVertex(ref v1Proj, ShadowColor, PrimitiveType.TriangleList);
             }
-            default:
-                break;
         }
     }
 
-    public void DrawSolidPolygon(Vector2[] vertices, int count, Color color)
+    private Vector2 ProjectVertex(Vector2 vertex, Vector2 lightPos)
     {
-        if (!primitiveBatch.IsReady())
+        // Calculate direction from light to vertex
+        Vector2 direction = vertex - lightPos;
+
+        // Handle the case where the vertex is at the light position
+        if (direction == Vector2.Zero)
         {
-            throw new InvalidOperationException(
-                "BeginCustomDraw must be called before drawing anything."
-            );
+            direction = new Vector2(0, -1); // Default direction if at light center
+        }
+        else
+        {
+            direction.Normalize();
         }
 
-        if (count == 2)
-        {
-            return;
-        }
-
-        for (int i = 1; i < count - 1; i++)
-        {
-            primitiveBatch.AddVertex(ref vertices[0], color, PrimitiveType.TriangleList);
-            primitiveBatch.AddVertex(ref vertices[i], color, PrimitiveType.TriangleList);
-            primitiveBatch.AddVertex(ref vertices[i + 1], color, PrimitiveType.TriangleList);
-        }
+        // Project the vertex outward by ShadowLength
+        return vertex + direction * ShadowLength;
     }
 
     public void Dispose()
@@ -278,5 +342,7 @@ class LightingSystem : ISystem
         pointLightTexture?.Dispose();
         lightTarget?.Dispose();
         shadowTarget?.Dispose();
+        individualLightTarget?.Dispose();
+        multiplyBlend?.Dispose();
     }
 }
