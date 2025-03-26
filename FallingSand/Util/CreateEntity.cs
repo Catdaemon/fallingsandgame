@@ -27,7 +27,7 @@ static partial class Util
             new JetpackComponent(100),
             new SpriteComponent("Player", "Idle", new Rectangle(0, 0, 16, 16)),
             new LightComponent(
-                size: 500f, // Size of the light
+                size: 100f, // Size of the light
                 intensity: 1.0f, // Brightness multiplier
                 color: Color.White, // Light color
                 castShadows: true // Whether this light casts shadows

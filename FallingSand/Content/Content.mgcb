@@ -85,3 +85,10 @@
 /processorParam:DebugMode=Auto
 /processorParam:PreprocessMode=PassThrough
 /build:Shaders/LightBlend.fx
+
+#begin Shaders/GaussianBlur.fx
+/importer:EffectImporter
+/processor:EffectProcessor
+/processorParam:DebugMode=Auto
+/processorParam:PreprocessMode=PassThrough
+/build:Shaders/GaussianBlur.fx

@@ -92,7 +92,7 @@ public class Game1 : Game
             new PositionComponent() { Position = new Vector2(100, 100) },
             new LightComponent()
             {
-                Size = 500f,
+                Size = 100f,
                 Intensity = 1.0f,
                 Color = Color.White,
                 CastShadows = true,

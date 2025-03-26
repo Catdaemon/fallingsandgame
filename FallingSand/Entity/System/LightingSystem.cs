@@ -29,13 +29,15 @@ class LightingSystem : ISystem
     private RenderTarget2D shadowTarget;
     private const int TextureSize = 512;
     private Effect lightingEffect;
+    private Effect blurEffect;
 
     // Custom blend state for multiply effect
     private BlendState multiplyBlend;
 
     // Shadow projection parameters
     private const float ShadowLength = 2000.0f; // Maximum shadow length in pixels
-    private Color ShadowColor = Color.Black; // Solid black shadow
+    private const float AmbientLightLevel = 0.5f; // Base light level (0-1)
+    private const float ShadowSoftness = 0.5f; // How soft the shadow edges are (0-1)
 
     public LightingSystem(World world, PhysicsWorld physicsWorld, GraphicsDevice graphicsDevice)
     {
@@ -98,6 +100,19 @@ class LightingSystem : ISystem
         lightingEffect = contentManager.Load<Effect>("Shaders/LightBlend");
         lightingEffect.Parameters["LightMap"].SetValue(lightTarget);
 
+        // Load blur effect for shadow smoothing
+        blurEffect = contentManager.Load<Effect>("Shaders/GaussianBlur");
+
+        // Set resolution parameter for the blur shader
+        blurEffect
+            .Parameters["Resolution"]
+            .SetValue(
+                new Vector2(
+                    graphicsDevice.PresentationParameters.BackBufferWidth,
+                    graphicsDevice.PresentationParameters.BackBufferHeight
+                )
+            );
+
         // Create point light texture
         pointLightTexture = new Texture2D(graphicsDevice, TextureSize, TextureSize);
         Color[] colors = new Color[TextureSize * TextureSize];
@@ -120,9 +135,9 @@ class LightingSystem : ISystem
 
     public void Draw(GameTime gameTime, float deltaTime, RenderTarget2D screenTarget)
     {
-        // Clear the render targets
+        // Set initial ambient light
         GraphicsDevice.SetRenderTarget(lightTarget);
-        GraphicsDevice.Clear(Color.Black);
+        GraphicsDevice.Clear(new Color(AmbientLightLevel, AmbientLightLevel, AmbientLightLevel));
 
         // Draw all entity lights with shadows
         var withLightQuery = new QueryDescription().WithAll<LightComponent, PositionComponent>();
@@ -189,12 +204,15 @@ class LightingSystem : ISystem
                         if (fixture.Shape is PolygonShape polygonShape)
                         {
                             // Process vertices and cast shadows
-                            ProjectShadowPolygon(polygonShape, transform, screenPos);
+                            ProjectShadowPolygon(polygonShape, transform, screenPos, light.Size);
                         }
                     }
                 }
 
                 primitiveBatch.End();
+
+                // Apply blur to the shadow map to smooth edges between adjacent bodies
+                ApplyBlurToShadowMap();
 
                 // Apply the shadow mask to the light
                 GraphicsDevice.SetRenderTarget(individualLightTarget);
@@ -257,10 +275,74 @@ class LightingSystem : ISystem
         spriteBatch.End();
     }
 
+    private void ApplyBlurToShadowMap()
+    {
+        // Skip this if blur effect isn't loaded
+        if (blurEffect == null)
+            return;
+
+        // Create a temporary target for the blur operations
+        var tempTarget = new RenderTarget2D(
+            GraphicsDevice,
+            shadowTarget.Width,
+            shadowTarget.Height,
+            false,
+            shadowTarget.Format,
+            DepthFormat.None
+        );
+
+        try
+        {
+            // Update the resolution parameter (in case of window resize)
+            blurEffect
+                .Parameters["Resolution"]
+                .SetValue(new Vector2(shadowTarget.Width, shadowTarget.Height));
+
+            // Apply horizontal blur
+            blurEffect.Parameters["BlurAmount"].SetValue(2.0f); // Adjust this value as needed
+            blurEffect.CurrentTechnique = blurEffect.Techniques["HorizontalBlur"];
+
+            // Render horizontal blur to temp target
+            GraphicsDevice.SetRenderTarget(tempTarget);
+            spriteBatch.Begin(
+                SpriteSortMode.Immediate,
+                BlendState.Opaque,
+                null,
+                null,
+                null,
+                blurEffect
+            );
+            spriteBatch.Draw(shadowTarget, Vector2.Zero, Color.White);
+            spriteBatch.End();
+
+            // Apply vertical blur
+            blurEffect.CurrentTechnique = blurEffect.Techniques["VerticalBlur"];
+
+            // Render vertical blur back to shadow target
+            GraphicsDevice.SetRenderTarget(shadowTarget);
+            spriteBatch.Begin(
+                SpriteSortMode.Immediate,
+                BlendState.Opaque,
+                null,
+                null,
+                null,
+                blurEffect
+            );
+            spriteBatch.Draw(tempTarget, Vector2.Zero, Color.White);
+            spriteBatch.End();
+        }
+        finally
+        {
+            // Clean up temporary resources
+            tempTarget?.Dispose();
+        }
+    }
+
     private void ProjectShadowPolygon(
         PolygonShape polygonShape,
         Transform transform,
-        Vector2 lightScreenPos
+        Vector2 lightScreenPos,
+        float lightSize
     )
     {
         int vertexCount = polygonShape.Vertices.Count;
@@ -296,24 +378,34 @@ class LightingSystem : ISystem
             // Calculate direction from light to edge midpoint
             Vector2 midPoint = (v1 + v2) * 0.5f;
             Vector2 lightToMid = midPoint - lightScreenPos;
+            float distanceToLight = lightToMid.Length();
 
             // If the edge is facing away from the light, cast a shadow
-            // Dot product between normal and light-to-mid vector determines this
             if (Vector2.Dot(normal, lightToMid) > 0)
             {
                 // Project vertices away from light
                 Vector2 v1Proj = ProjectVertex(v1, lightScreenPos);
                 Vector2 v2Proj = ProjectVertex(v2, lightScreenPos);
 
-                // First triangle: v1, v2, v1Proj
-                primitiveBatch.AddVertex(ref v1, ShadowColor, PrimitiveType.TriangleList);
-                primitiveBatch.AddVertex(ref v2, ShadowColor, PrimitiveType.TriangleList);
-                primitiveBatch.AddVertex(ref v2Proj, ShadowColor, PrimitiveType.TriangleList);
+                // Calculate shadow intensity based on distance from light
+                // Closer to light = darker shadow, farther = more transparent
+                float shadowIntensity = MathHelper.Clamp(
+                    1.0f - (distanceToLight / (lightSize * TextureSize * 0.75f)) * ShadowSoftness,
+                    0.0f,
+                    1.0f
+                );
 
-                // Second triangle: v1, v1Proj, v2Proj
-                primitiveBatch.AddVertex(ref v1, ShadowColor, PrimitiveType.TriangleList);
-                primitiveBatch.AddVertex(ref v2Proj, ShadowColor, PrimitiveType.TriangleList);
-                primitiveBatch.AddVertex(ref v1Proj, ShadowColor, PrimitiveType.TriangleList);
+                // Color with variable alpha for soft shadows
+                Color shadowColor = new Color(0, 0, 0, shadowIntensity);
+
+                // Draw the shadow with variable alpha
+                primitiveBatch.AddVertex(ref v1, shadowColor, PrimitiveType.TriangleList);
+                primitiveBatch.AddVertex(ref v2, shadowColor, PrimitiveType.TriangleList);
+                primitiveBatch.AddVertex(ref v2Proj, shadowColor, PrimitiveType.TriangleList);
+
+                primitiveBatch.AddVertex(ref v1, shadowColor, PrimitiveType.TriangleList);
+                primitiveBatch.AddVertex(ref v2Proj, shadowColor, PrimitiveType.TriangleList);
+                primitiveBatch.AddVertex(ref v1Proj, shadowColor, PrimitiveType.TriangleList);
             }
         }
     }
@@ -344,5 +436,6 @@ class LightingSystem : ISystem
         shadowTarget?.Dispose();
         individualLightTarget?.Dispose();
         multiplyBlend?.Dispose();
+        blurEffect?.Dispose();
     }
 }
